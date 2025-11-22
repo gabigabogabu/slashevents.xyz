@@ -1,6 +1,6 @@
 import { serve } from "bun";
 import index from "./index.html";
-import * as s from "./server/index.ts";
+import * as s from "./server";
 
 const server = serve({
   routes: {
@@ -8,30 +8,28 @@ const server = serve({
     "/*": index,
 
     // app-facing RPC for the customer facing UI to use
-    "/app-rpc": (req) => {
-      // TODO: implement app RPC
-      return new Response("Hello, world!");
-    },
+    "/app-rpc": s.appRpc,
 
     // internal RPC for the admin to use
-    "/admin-rpc": (req) => {
-      // TODO: implement admin RPC
-      return new Response("Hello, world!");
-    },
+    "/admin-rpc": s.adminRpc,
 
     // customer-facing API to fetch stored webhooks
-    "/api-rpc": (req) => {
-      // TODO: implement API RPC
-      return new Response("Hello, world!");
-    },
+    "/api-rpc": s.apiRpc,
 
     // world-facing API for ingestion, webhooks should land here
     "/ingestion/:customerId/l/:latchId": (req) => {
       // TODO: implement customer creation
       // TODO: implement latch creation
       // TODO: store the webhook
-      return new Response("Hello, world!");
+      return new Response("ingestion");
     },
+
+    "/health/liveness": s.isAppAlive,
+    "/health/readiness": s.isAppReady,
+  },
+  error: (error) => {
+    console.error('Unhandled error in server', error);
+    return new Response(null, { status: 500 });
   },
 
   development: process.env.NODE_ENV !== "production" && {
@@ -42,8 +40,5 @@ const server = serve({
     console: true,
   },
 });
-
-const result = await s.db`SELECT 2`;
-console.log(result);
 
 console.log(`🚀 Server running at ${server.url}`);

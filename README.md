@@ -3,8 +3,17 @@ description: README.md
 alwaysApply: false
 ---
 # Web-Latch
+Never lose a webhook.
 
-A service which catches webhooks from various 3rd parties and stores them.
+- receive webhooks from various 3rd parties and store them
+- provide an RPC API for the consumer service to (long) poll for new webhooks
+  - getWebhooks(afterId, limit, timeout, filter) -> [webhook1, webhook2, ...]
+    - afterId skip over webhooks earlier than this id
+    - limit max number of webhooks to return
+    - timeout max time to wait for new webhooks
+    - filter optional filter to apply to the webhooks, e.g. only specific sources
+- customer can configure latches, each latch
+  - can have a list of acceptable IP addresses to receive webhooks from
 
 
 
