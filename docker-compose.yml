@@ -1,0 +1,9 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: web-latch
+      POSTGRES_PASSWORD: web-latch
+      POSTGRES_DB: web-latch
+    ports:
+      - 5432:5432

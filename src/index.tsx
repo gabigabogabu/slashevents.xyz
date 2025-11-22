@@ -1,5 +1,6 @@
 import { serve } from "bun";
 import index from "./index.html";
+import * as s from "./server/index.ts";
 
 const server = serve({
   routes: {
@@ -41,5 +42,8 @@ const server = serve({
     console: true,
   },
 });
+
+const result = await s.db`SELECT 2`;
+console.log(result);
 
 console.log(`🚀 Server running at ${server.url}`);
