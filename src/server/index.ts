@@ -1,12 +1,10 @@
 import { z } from "zod";
-import crypto from "node:crypto";
-import jwt from "jsonwebtoken";
 
 import { env } from "./env";
 import { getDb, isDbUp } from "./db/init";
-import * as queries from "./db/queries";
-import { defRpc, RpcError, RpcHandler } from "./rpc-handler";
+import { defRpc, RpcHandler } from "./rpc-handler";
 import { MigrationStatus, runMigrations } from "./db/run-migrations";
+import { userSignup, userLogin } from "./services/user/auth";
 
 enum HttpStatus {
   OK = 200,
@@ -40,52 +38,20 @@ const handleBunServe = (handler: RpcHandler<any>) => {
   }
 }
 
-const generateSalt = (size: number = 16) => crypto.randomBytes(size).toString("hex");
-const hashPassword = (password: string, salt: string) => crypto.pbkdf2Sync(password, salt, 1000, 128, "sha512").toString("hex");
-const signUserJwt = (userId: string) => jwt.sign({ userId }, env.JWT_PRIVATE_KEY);
-
 export const appRpc = handleBunServe(new RpcHandler({
   userSignup: defRpc({
     inputValidation: z.object({
       email: z.email(),
       password: z.string().min(8),
     }),
-    handle: async ({ params }) => {
-      const { email, password } = params;
-      const passwordSalt = generateSalt();
-      const passwordHash = hashPassword(password, passwordSalt);
-      const userId = await queries.insertUser(db, { email, passwordHash, passwordSalt });
-      if (!userId)
-        throw new RpcError("Failed to create user", "InternalServerError", 500);
-      const jwtToken = signUserJwt(userId);
-      return { jwtToken };
-    },
+    handle: async ({ params }) => userSignup(params, { db, env }),
   }),
   userLogin: defRpc({
     inputValidation: z.object({
       email: z.email(),
       password: z.string().min(8),
     }),
-    handle: async ({ params }) => {
-      // no early return to avoid timing attacks
-      const { email, password } = params;
-      // mock user in case no user is found
-      const storedUserIdMock = crypto.randomUUID();
-      const storedPasswordSaltMock = generateSalt();
-      const storedPasswordHashMock = hashPassword("dummy", storedPasswordSaltMock);
-
-      const foundUser = await queries.getUserPasswordHashAndSaltByEmail(db, { email });
-      // hash the provided password with the stored salt (or mock salt if no user found)
-      const providedPasswordHash = hashPassword(password, foundUser?.passwordSalt ?? storedPasswordSaltMock);
-      const storedPasswordHash = foundUser?.passwordHash ?? storedPasswordHashMock;
-      // compare even if no user is found to avoid timing attacks
-      const isPasswordValid = crypto.timingSafeEqual(Buffer.from(providedPasswordHash), Buffer.from(storedPasswordHash));
-      if (!isPasswordValid || !foundUser?.id) {
-        throw new RpcError("Invalid email or password", "AuthenticationError", 401);
-      };
-      const jwtToken = signUserJwt(foundUser?.id);
-      return { jwtToken };
-    },
+    handle: async ({ params }) => userLogin(params, { db, env }),
   }),
 }));
 export const adminRpc = handleBunServe(new RpcHandler({}));
