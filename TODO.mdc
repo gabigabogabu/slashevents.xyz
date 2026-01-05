@@ -1,0 +1,17 @@
+---
+description: Implementation Plan
+alwaysApply: false
+---
+# TODO
+
+If a new task is being asked for, add it to the TODO.mdc file.
+If you're starting to work on a task, add a [ ] to the task in the TODO.mdc file.
+If you've completed a task, add a [x] to the task in the TODO.mdc file.
+
+- [ ] Add Users and password auth (signup, login, logout, forgot password, reset password)
+  - setup the service skeleton at the same time
+- Add Accounts
+- Add ApiKeys
+- Add Latches
+- Add Events
+- Add Okta auth

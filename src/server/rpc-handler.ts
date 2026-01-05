@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-class RpcError extends Error {
+export class RpcError extends Error {
   constructor(message: string, name: string, public httpCode: number, cause?: unknown) {
     super(message);
     this.name = name;
@@ -64,18 +64,36 @@ type CacheConfig<Result> = {
   set: (value: Result) => Promise<void>;
 } | undefined;
 
+
+// optional auth and rateLimit that will be defaulted
+type RpcDefInit<ParamsType, AuthMeta = unknown, RateLimitMeta = unknown, ResultType = unknown> =
+  Pick<RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType>, 'inputValidation' | 'handle'> &
+  Partial<Pick<RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType>, 'auth' | 'rateLimit' | 'cache'>>;
+/**
+ * Utility function to define an RPC
+ * @param def 
+ * @returns def
+ */
+export const defRpc = <ParamsType, AuthMeta = unknown, RateLimitMeta = unknown, ResultType = unknown>({
+  inputValidation,
+  handle,
+  auth = async () => ({ success: true, result: undefined as unknown as AuthMeta }),
+  rateLimit = async () => ({ success: true, result: undefined as unknown as RateLimitMeta }),
+  cache = async () => undefined,
+}: RpcDefInit<ParamsType, AuthMeta, RateLimitMeta, ResultType>): RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType> => ({inputValidation, auth, rateLimit, handle, cache});
+
 type RpcDef<Params, AuthMeta, RateLimitMeta, Result> = {
   inputValidation: z.ZodSchema<Params>;
-  auth: (rpc: Rpc<Params>) => Promise<GuardResult<AuthMeta>>;
-  rateLimit: (rpc: Rpc<Params>, authResult: GuardResult<AuthMeta>) => Promise<GuardResult<RateLimitMeta>>;
-  cache: (rpc: Rpc<Params>, authResult: GuardResult<AuthMeta>, rateLimitResult: GuardResult<RateLimitMeta>) => Promise<CacheConfig<Result>>;
+  auth: (rpc: Rpc<Params>) => Promise<GuardResult<AuthMeta>> | GuardResult<AuthMeta>;
+  rateLimit: (rpc: Rpc<Params>, authResult: GuardResult<AuthMeta>) => Promise<GuardResult<RateLimitMeta>> | GuardResult<RateLimitMeta>;
+  cache: (rpc: Rpc<Params>, authResult: GuardResult<AuthMeta>, rateLimitResult: GuardResult<RateLimitMeta>) => Promise<CacheConfig<Result>> | CacheConfig<Result>;
   handle: (
     {
       params, 
       authResult, 
       rateLimitResult
     }: {
-      params?: Params, 
+      params: Params, 
       authResult: GuardResult<AuthMeta>, 
       rateLimitResult: GuardResult<RateLimitMeta>
     }) => Promise<Result>;
@@ -116,7 +134,6 @@ export class RpcHandler<RpcMap extends Record<string, RpcDef<any, any, any, any>
    */
   constructor(
     private readonly rpcs: RpcMap,
-    private readonly config: {parallelism: number} = {parallelism: 1},
   ) {}
 
   async handle(request: unknown): Promise<RpcReturn<any>> {

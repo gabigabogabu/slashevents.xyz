@@ -4,6 +4,7 @@ const envSchema = zod.object({
   NODE_ENV: zod.enum(["development", "production"]),
   PORT: zod.coerce.number().default(3000),
   DATABASE_URL: zod.string(),
+  JWT_PRIVATE_KEY: zod.string(),
 });
 
 export type Env = zod.infer<typeof envSchema>;
