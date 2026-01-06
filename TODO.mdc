@@ -9,6 +9,7 @@ If you're starting to work on a task, add a [ ] to the task in the TODO.mdc file
 If you've completed a task, add a [x] to the task in the TODO.mdc file.
 
 - [x] Set up UI skeleton (landing, app UI, admin UI)
+- [ ] Move app data out of the public schema (use a dedicated schema)
 - [ ] Add Users and password auth (signup, login, logout, forgot password, reset password)
   - setup the service skeleton at the same time
 - Add Accounts

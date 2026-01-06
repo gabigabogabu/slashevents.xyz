@@ -19,8 +19,8 @@ describe("user queries", () => {
   test("createUser inserts a user and returns the id", async () => {
     const userId = await insertUser(db, {
       email: testEmail,
-      passwordHash: "testhash123",
-      passwordSalt: "testsalt123",
+      password_hash: "testhash123",
+      password_salt: "testsalt123",
     });
 
     expect(userId).toBeDefined();
@@ -34,8 +34,8 @@ describe("user queries", () => {
 
     expect(user).toBeDefined();
     expect(user?.id).toBeDefined();
-    expect(user?.passwordHash).toBe("testhash123");
-    expect(user?.passwordSalt).toBe("testsalt123");
+    expect(user?.password_hash).toBe("testhash123");
+    expect(user?.password_salt).toBe("testsalt123");
   });
 
   test("getUserPasswordHashAndSaltByEmail returns undefined for non-existent user", async () => {

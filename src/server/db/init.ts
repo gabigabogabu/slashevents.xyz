@@ -1,7 +1,11 @@
 import { SQL } from "bun";
 import { type Env } from "../env";
 
-export const getDb = (env: Env) => new SQL(env.DATABASE_URL);
+export const getDb = (env: Env) => {
+  const db = new SQL(env.DATABASE_URL);
+  db`SET search_path TO app`;
+  return db;
+};
 
 export const isDbUp = async (db: SQL) => {
   try {

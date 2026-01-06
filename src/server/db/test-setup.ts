@@ -2,7 +2,9 @@ import { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import sortBy from "lodash/sortBy";
 
-export const TEST_DB_URL = "postgres://web-latch:web-latch@localhost:5432/web-latch-test";
+export const TEST_DB_URL =
+  process.env.TEST_DB_URL ??
+  "postgres://slashevents:slashevents@localhost:5432/slashevents_test";
 
 export const getTestDb = () => new SQL(TEST_DB_URL);
 
@@ -10,9 +12,9 @@ export const getTestDb = () => new SQL(TEST_DB_URL);
  * Resets the test database by dropping all tables and re-running migrations
  */
 export const resetTestDb = async (db: SQL) => {
-  // Drop all tables in public schema
-  await db`DROP SCHEMA IF EXISTS public CASCADE`;
-  await db`CREATE SCHEMA public`;
+  await db`DROP SCHEMA IF EXISTS app CASCADE`;
+  await db`CREATE SCHEMA app`;
+  await db`SET search_path TO app`;
   await db`DROP SCHEMA IF EXISTS migrations CASCADE`;
   
   // Run all migrations
