@@ -1,0 +1,9 @@
+---
+description: Code Style
+alwaysApply: true
+---
+
+- Don't use `any` or `as unknown as` unless absolutely necessary.
+- Simple is usually better, don't overcomplicate things.
+- If the approach to fixing a bug is changed, try to remove the code for the old approach.
+- If you find other unused code, ask to remove it after you've completed your task, the user will usually agree.

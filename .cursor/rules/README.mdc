@@ -1,6 +1,6 @@
 ---
 description: README.md
-alwaysApply: false
+alwaysApply: true
 ---
 # Web-Latch
 Never lose a webhook.
@@ -25,12 +25,15 @@ Everything is in this one server to build the MVP. This server will host multipl
   - query/fetch events for an account, delete events, accessible with API keys
 - ingress
   - endpoint for 3rd parties to send webhooks to. e.g. `<weblatch>/ingress/:account_uuid/:rest_of_url`
-- UI
+- UI (App & Admin & PDF are desktop only, Landing & Email are mobile-friendly)
   - landing page
   - "app UI" public facing UI, uses the appRPCs
   - "admin UI" administrative UI to be used by customer support, etc. Uses the adminRPCs
-  - "pdf UI" internal UI to render PDFs. (Pupeteer w/ headless chrome opens these pages and prints to PDF (or similar)) e.g. invoices
-  - "email UI" similar to PDF UI but for html email body rendering
+  - "pdf UI" internal UI to render PDFs. ONLY AVAILABLE INTERNALLY (Pupeteer w/ headless chrome opens these pages and prints to PDF (or similar)) e.g. invoices
+  - "email UI" similar to PDF UI but for html email body rendering. ONLY AVAILABLE INTERNALLY
+
+`src/server/index.ts` exports a server type that the frontend can use to make RPC calls.
+`src/lib/rpc.ts` imports the server type and exports a client.
 
 Storage:
 - A postgres DB

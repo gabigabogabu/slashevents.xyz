@@ -1,6 +1,7 @@
 import { serve } from "bun";
 import index from "./index.html";
 import * as s from "./server";
+export type { AppRpc, AdminRpc, ApiRpc } from "./server";
 
 const server = serve({
   routes: {
@@ -17,9 +18,8 @@ const server = serve({
     "/api-rpc": s.apiRpc,
 
     // world-facing API for ingestion, webhooks should land here
-    "/ingestion/:customerId/l/:latchId": (req) => {
-      // TODO: implement customer creation
-      // TODO: implement latch creation
+    "/inggress/:customerId/l/:latchId": (req) => {
+      // TODO: implement account creation
       // TODO: store the webhook
       return new Response("ingestion");
     },
@@ -29,6 +29,7 @@ const server = serve({
   },
   error: (error) => {
     console.error('Unhandled error in server', error);
+    console.dir({ message: 'Unhandled error in server', error }, { depth: null });
     return new Response(null, { status: 500 });
   },
 
