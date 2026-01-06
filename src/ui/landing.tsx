@@ -4,7 +4,7 @@ export function LandingPage() {
   return (
     <div className="grid min-h-screen w-full place-items-center p-4">
       <div className="flex flex-col items-center gap-6 text-center">
-        <h1 className="text-6xl font-bold tracking-tight">Weblatch</h1>
+        <h1 className="text-6xl font-bold tracking-tight">slashevents.io</h1>
         <p className="text-xl text-muted-foreground">never lose a webhook</p>
         <Link
           to="/app"

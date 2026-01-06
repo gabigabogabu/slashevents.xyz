@@ -1,7 +1,7 @@
 import * as React from "react";
 import { appRpc } from "@/lib/rpc";
 
-const JWT_STORAGE_KEY = "web-latch-jwt";
+const JWT_STORAGE_KEY = "slashevents.io-jwt";
 
 type AuthState =
   | { status: "loading" }

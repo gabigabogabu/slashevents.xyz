@@ -72,8 +72,8 @@ export function LoginPage() {
             </CardTitle>
             <CardDescription>
               {mode === "login"
-                ? "Sign in to your WebLatch account"
-                : "Get started with WebLatch"}
+                ? "Sign in to your slashevents.io account"
+                : "Get started with slashevents.io"}
             </CardDescription>
           </CardHeader>
 

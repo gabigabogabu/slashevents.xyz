@@ -13,15 +13,11 @@ const appNav = [
 function AppContent() {
   const pathname = usePathname();
 
-  if (isActivePath(pathname, "/app/users")) {
+  if (isActivePath(pathname, "/app/users"))
     return <PlaceholderPage title="Users" description="Invite users and manage account permissions." />;
-  }
-
-  // "/app" is redirected to "/app/dashboard" at the app router level.
-  if (isActivePath(pathname, "/app/dashboard")) {
+  if (isActivePath(pathname, "/app/dashboard"))
     return <PlaceholderPage title="Dashboard" description="High-level account overview and recent activity." />;
-  }
-
+  
   return <PlaceholderPage title="Dashboard" description="High-level account overview and recent activity." />;
 }
 
@@ -30,7 +26,7 @@ function AuthenticatedApp() {
 
   return (
     <Shell
-      title="WebLatch — App"
+      title="slashevents.io"
       nav={[...appNav]}
       onLogout={logout}
     >

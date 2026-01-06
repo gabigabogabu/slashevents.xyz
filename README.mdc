@@ -2,7 +2,7 @@
 description: README.md
 alwaysApply: true
 ---
-# Web-Latch
+# slashevents.io
 Never lose a webhook.
 
 - receive webhooks from various 3rd parties and store them
@@ -24,7 +24,7 @@ Everything is in this one server to build the MVP. This server will host multipl
 - apiRpc: the RPC endpoints and handler to be used by the users' system
   - query/fetch events for an account, delete events, accessible with API keys
 - ingress
-  - endpoint for 3rd parties to send webhooks to. e.g. `<weblatch>/ingress/:account_uuid/:rest_of_url`
+  - endpoint for 3rd parties to send webhooks to. e.g. `<slashevents.io>/ingress/:account_uuid/:rest_of_url`
 - UI (App & Admin & PDF are desktop only, Landing & Email are mobile-friendly)
   - landing page
   - "app UI" public facing UI, uses the appRPCs
@@ -36,7 +36,7 @@ Everything is in this one server to build the MVP. This server will host multipl
 `src/lib/rpc.ts` imports the server type and exports a client.
 
 Storage:
-- A postgres DB
+- A postgres DB (locally running in a container. psql is available to inspect the local db)
 
 ## DB Tables
 - Events
