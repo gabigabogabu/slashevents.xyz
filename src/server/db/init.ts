@@ -2,9 +2,16 @@ import { SQL } from "bun";
 import { type Env } from "../env";
 
 export const getDb = (env: Env) => {
-  const db = new SQL(env.DATABASE_URL);
-  db`SET search_path TO app`;
-  return db;
+  const db = new SQL(env.DATABASE_URL, {
+    connection: {
+      search_path: "app",
+    }
+  });
+  const closeDb = async () => {
+    console.log("Closing database connection");
+    await db.close();
+  };
+  return { db, closeDb };
 };
 
 export const isDbUp = async (db: SQL) => {

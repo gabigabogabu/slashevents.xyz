@@ -14,7 +14,7 @@ enum HttpStatus {
   SERVER_ERROR = 500,
 }
 
-export const db = getDb(env);
+const {db, closeDb} = getDb(env);
 const { getMigrationsStatus, migrationPromise } = runMigrations(db);
 
 const okResponse = new Response("OK", { status: 200 });
@@ -67,3 +67,7 @@ export type AdminRpc = typeof adminRpc._rpcType;
 const _apiRpcHandler = new RpcHandler({});
 export const apiRpc = handleBunServe(_apiRpcHandler);
 export type ApiRpc = typeof apiRpc._rpcType;
+
+export const closeServer = async () => {
+  await closeDb();
+};

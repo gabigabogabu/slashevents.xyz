@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot src/index.tsx",
+    "dev": "bun --watch --no-clear-screen src/index.tsx",
     "start": "NODE_ENV=production bun src/index.tsx",
-    "build": "bun run build.ts"
+    "build": "bun run build.ts",
+    "test:dev": "bun --watch --no-clear-screen test"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.7",

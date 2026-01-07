@@ -43,3 +43,12 @@ const server = serve({
 });
 
 console.log(`🚀 Server running at ${server.url}`);
+
+const shutdown = async (signal: string) => {
+  console.log(`Shutting down server on ${signal}`);
+  await s.closeServer();
+  await server.stop();
+  process.exit(0);
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
