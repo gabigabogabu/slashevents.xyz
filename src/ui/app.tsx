@@ -3,18 +3,30 @@ import { isActivePath, usePathname } from "@/ui/router";
 import { PlaceholderPage } from "@/ui/placeholder";
 import { useAuth } from "@/ui/auth-context";
 import { LoginPage } from "@/ui/login";
-import { ProjectsPage } from "@/ui/projects";
+import { ProjectsListPage, ProjectDetailPage } from "@/ui/projects";
 import { FolderOpen, Loader2 } from "lucide-react";
 
 const appNav = [
   { to: "/app/projects", label: "Projects", icon: <FolderOpen className="size-4" /> },
 ] as const;
 
+// Extract project ID from pathname like /app/projects/:uuid
+function extractProjectId(pathname: string): string | null {
+  const match = pathname.match(/^\/app\/projects\/([a-f0-9-]{36})$/i);
+  return match ? match[1] : null;
+}
+
 function AppContent() {
   const pathname = usePathname();
 
+  // Check for specific project route first
+  const projectId = extractProjectId(pathname);
+  if (projectId) {
+    return <ProjectDetailPage projectId={projectId} />;
+  }
+
   if (isActivePath(pathname, "/app/projects"))
-    return <ProjectsPage />;
+    return <ProjectsListPage />;
   
   return <PlaceholderPage title="Dashboard" description="High-level account overview and recent activity." />;
 }

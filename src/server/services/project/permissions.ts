@@ -9,7 +9,7 @@ import { ProjectEventType } from "@/server/db/queries/project-event";
 
 /**
  * Check if the actor has permission to manage users in the project.
- * Throws an error if they don't.
+ * Throws PROJECT_NOT_FOUND if they don't (to avoid revealing project existence).
  */
 const assertCanManageUsers = async (
   params: {
@@ -26,7 +26,7 @@ const assertCanManageUsers = async (
   });
 
   if (!hasPermission)
-    throw new RpcError(ErrorCode.FORBIDDEN, 403, "Requires manage users permission");
+    throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
 };
 
 /**

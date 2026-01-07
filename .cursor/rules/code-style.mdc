@@ -11,3 +11,6 @@ alwaysApply: true
 - Don't return `{ success: true }` or `{ success: false }` or similar, just return void or throw an error.
 - Function parameters should roughly have the structure `params: { ... }, di: {db: SQL}`.
 - Error messages should be machine readable/constants in the backend and mapped to human readable strings in the frontend.
+- Most if not all pages should have their own URL.
+- When asked to fix an error, first add a test case to reproduce it and then fix it.
+- Only write useful comments. Comments which just repeat the code can be removed.

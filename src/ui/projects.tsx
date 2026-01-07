@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useAuth } from "@/ui/auth-context";
+import { navigate, Link } from "@/ui/router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,12 +35,11 @@ type ProjectEvent = {
   createdAt: string;
 };
 
-export function ProjectsPage() {
+export function ProjectsListPage() {
   const { authenticatedRpc } = useAuth();
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [selectedProject, setSelectedProject] = React.useState<Project | null>(null);
 
   const fetchProjects = React.useCallback(async () => {
     try {
@@ -63,15 +63,6 @@ export function ProjectsPage() {
       <div className="flex items-center justify-center p-8">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
       </div>
-    );
-  }
-
-  if (selectedProject) {
-    return (
-      <ProjectDetail
-        project={selectedProject}
-        onBack={() => setSelectedProject(null)}
-      />
     );
   }
 
@@ -99,10 +90,10 @@ export function ProjectsPage() {
           ) : (
             <div className="space-y-2">
               {projects.map((project) => (
-                <button
+                <Link
                   key={project.id}
-                  onClick={() => setSelectedProject(project)}
-                  className="w-full flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
+                  to={`/app/projects/${project.id}`}
+                  className="w-full flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left block"
                 >
                   <div>
                     <div className="font-medium">{project.name}</div>
@@ -111,7 +102,7 @@ export function ProjectsPage() {
                     </div>
                   </div>
                   <Users className="size-4 text-muted-foreground" />
-                </button>
+                </Link>
               ))}
             </div>
           )}
@@ -119,6 +110,57 @@ export function ProjectsPage() {
       </Card>
     </div>
   );
+}
+
+export function ProjectDetailPage({ projectId }: { projectId: string }) {
+  const { authenticatedRpc } = useAuth();
+  const [project, setProject] = React.useState<Project | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await authenticatedRpc.getProject({ projectId });
+        setProject(result.project);
+      } catch (err) {
+        setError(getErrorMessage(err));
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProject();
+  }, [authenticatedRpc, projectId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error || !project) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/app/projects")}>
+            <ArrowLeft className="size-4 mr-2" />
+            Back to Projects
+          </Button>
+        </div>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-sm text-destructive">{error ?? "Project not found"}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return <ProjectDetail project={project} />;
 }
 
 function CreateProjectForm({ onCreated }: { onCreated: () => void }) {
@@ -179,12 +221,11 @@ function CreateProjectForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
-function ProjectDetail({ project, onBack }: { project: Project; onBack: () => void }) {
+function ProjectDetail({ project }: { project: Project }) {
   const { authenticatedRpc } = useAuth();
   const [users, setUsers] = React.useState<ProjectUser[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [canManageUsers, setCanManageUsers] = React.useState(false);
 
   const fetchUsers = React.useCallback(async () => {
     try {
@@ -192,12 +233,8 @@ function ProjectDetail({ project, onBack }: { project: Project; onBack: () => vo
       setError(null);
       const result = await authenticatedRpc.getProjectUsers({ projectId: project.id });
       setUsers(result.users);
-      // Check if current user can manage users (they would have been able to fetch if they have read permission)
-      // We'll determine manage capability by checking their own permissions
-      setCanManageUsers(true); // Will be refined based on actual permissions check
     } catch (err) {
       setError(getErrorMessage(err));
-      setCanManageUsers(false);
     } finally {
       setLoading(false);
     }
@@ -207,21 +244,10 @@ function ProjectDetail({ project, onBack }: { project: Project; onBack: () => vo
     fetchUsers();
   }, [fetchUsers]);
 
-  // Check if current user has manage permission
-  React.useEffect(() => {
-    // This is a simple check - if the user can see users, check their permissions
-    const checkManagePermission = async () => {
-      // The user list contains the current user's permissions
-      // We don't know the current user's ID here, so we'll enable manage for anyone with the permission
-      // A more robust solution would pass the current user's ID from auth context
-    };
-    checkManagePermission();
-  }, [users]);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={onBack}>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/app/projects")}>
           <ArrowLeft className="size-4 mr-2" />
           Back to Projects
         </Button>

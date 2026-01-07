@@ -1,5 +1,6 @@
 // Auto-generated clients with inferred types from server
 import type { AppRpc, AdminRpc, ApiRpc } from "../index";
+import { ErrorCode } from "./errors";
 
 type IsUndefined<T> = [T] extends [undefined] ? true : false;
 type IsEmptyObject<T> = T extends object ? (keyof T extends never ? true : false) : false;
@@ -86,7 +87,11 @@ export const adminRpc = createRpcClient<AdminRpc>(fetchRpc("/admin-rpc"));
 export const apiRpc = createRpcClient<ApiRpc>(fetchRpc("/api-rpc"));
 
 // Create an authenticated RPC client that automatically injects JWT token
-export function createAuthenticatedAppRpc(getToken: () => string | null): AuthenticatedClientRPC<AppRpc> {
+// If an AUTHENTICATION_ERROR is returned, the onAuthError callback is called (typically to logout)
+export function createAuthenticatedAppRpc(
+  getToken: () => string | null,
+  onAuthError?: () => void
+): AuthenticatedClientRPC<AppRpc> {
   return new Proxy({} as AuthenticatedClientRPC<AppRpc>, {
     get: (_target, prop) => {
       if (typeof prop !== "string") return undefined;
@@ -98,7 +103,15 @@ export function createAuthenticatedAppRpc(getToken: () => string | null): Authen
         }
         // Type assertion needed because we're dynamically calling methods
         const rpcMethod = appRpc[method] as (args: Record<string, unknown>) => Promise<unknown>;
-        return rpcMethod({ ...args, jwt: token });
+        try {
+          return await rpcMethod({ ...args, jwt: token });
+        } catch (error) {
+          // Auto-logout on authentication errors (e.g., user no longer exists)
+          if (error instanceof Error && error.name === ErrorCode.AUTHENTICATION_ERROR) {
+            onAuthError?.();
+          }
+          throw error;
+        }
       };
     },
   });

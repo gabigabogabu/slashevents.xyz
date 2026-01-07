@@ -13,6 +13,13 @@ export const createProject = async (
   di: { db: SQL }
 ): Promise<{ projectId: UUID }> => {
   const { db } = di;
+
+  // Verify user exists (JWT may be from a deleted user or old database)
+  const user = await queries.getUserById(db, { id: actorUserId });
+  if (!user) {
+    throw new RpcError(ErrorCode.AUTHENTICATION_ERROR, 401, "User not found. Please sign in again.");
+  }
+
   const projectId = await queries.insertProject(db, {
     name,
     created_by_user_id: actorUserId,
@@ -81,7 +88,6 @@ export const getProjectUsers = async (
 ): Promise<{
   users: { userId: UUID; email: string; permissions: ProjectPermission[] }[];
 }> => {
-  // Check if user has read permission on this project
   const hasAccess = await queries.checkUserHasProjectPermission(db, {
     project_id: projectId,
     user_id: actorUserId,
@@ -89,7 +95,7 @@ export const getProjectUsers = async (
   });
 
   if (!hasAccess) {
-    throw new RpcError(ErrorCode.FORBIDDEN, 403);
+    throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
   }
 
   const users = await queries.getProjectUsers(db, { project_id: projectId });
@@ -182,7 +188,7 @@ export const getProjectEvents = async (
   });
 
   if (!hasAccess) {
-    throw new RpcError(ErrorCode.FORBIDDEN, 403);
+    throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
   }
 
   const [events, total] = await Promise.all([

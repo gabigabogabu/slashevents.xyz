@@ -102,7 +102,7 @@ describe("permissions service", () => {
       expect(granted).toBe(false);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       expect(
         permissionsService.grantPermission({
           projectId,
@@ -110,7 +110,7 @@ describe("permissions service", () => {
           permission: ProjectPermission.PROJECT_READ_USERS,
           actorUserId: regularUserId, // regularUser only has read permission
         }, { db })
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 
@@ -162,7 +162,7 @@ describe("permissions service", () => {
       expect(revoked).toBe(false);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       expect(
         permissionsService.revokePermission({
           projectId,
@@ -170,7 +170,7 @@ describe("permissions service", () => {
           permission: ProjectPermission.PROJECT_READ_USERS,
           actorUserId: regularUserId,
         }, { db })
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
 
     test("throws when trying to revoke own manage permission", async () => {
@@ -262,7 +262,7 @@ describe("permissions service", () => {
       expect(permissions).not.toContain(ProjectPermission.PROJECT_READ_USERS);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       expect(
         permissionsService.syncPermissions({
           projectId: syncTestProjectId,
@@ -270,7 +270,7 @@ describe("permissions service", () => {
           permissions: [ProjectPermission.PROJECT_READ_USERS],
           actorUserId: regularUserId,
         }, { db })
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 
@@ -342,7 +342,7 @@ describe("permissions service", () => {
       expect(userAddedCountAfter).toBe(userAddedCountBefore);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       expect(
         permissionsService.addUserToProject({
           projectId: addUserTestProjectId,
@@ -350,7 +350,7 @@ describe("permissions service", () => {
           permissions: [ProjectPermission.PROJECT_READ_USERS],
           actorUserId: regularUserId,
         }, { db })
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 
@@ -435,14 +435,14 @@ describe("permissions service", () => {
       ).rejects.toThrow(ErrorCode.BAD_REQUEST);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       expect(
         permissionsService.removeUserFromProject({
           projectId: removeUserTestProjectId,
           userId: adminUserId,
           actorUserId: regularUserId,
         }, { db })
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 });

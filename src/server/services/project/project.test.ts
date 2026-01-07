@@ -96,6 +96,19 @@ describe("project service", () => {
 
       expect(grantEvents.length).toBe(2);
     });
+
+    test("throws AUTHENTICATION_ERROR when actor user does not exist", async () => {
+      const nonExistentUserId = "00000000-0000-0000-0000-000000000000" as UUID;
+      try {
+        await projectService.createProject(
+          { name: "Should Fail", actorUserId: nonExistentUserId },
+          { db }
+        );
+        expect.unreachable("Should have thrown");
+      } catch (error) {
+        expect((error as Error).name).toBe(ErrorCode.AUTHENTICATION_ERROR);
+      }
+    });
   });
 
   describe("getProjects", () => {
@@ -181,10 +194,10 @@ describe("project service", () => {
       expect(result.users[0]?.permissions).toContain(ProjectPermission.PROJECT_MANAGE_USERS);
     });
 
-    test("throws for user without read permission", async () => {
+    test("throws PROJECT_NOT_FOUND for user without read permission", async () => {
       expect(
         projectService.getProjectUsers({ projectId: testProjectId, actorUserId: nonMemberUserId }, { db })
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 
@@ -231,7 +244,7 @@ describe("project service", () => {
       ).rejects.toThrow(ErrorCode.USER_NOT_FOUND);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       // Create a user with only read permission
       const readOnlyEmail = `readonly-add-${Date.now()}@example.com`;
       const readOnlyUserId = (await queries.insertUser(db, {
@@ -256,7 +269,7 @@ describe("project service", () => {
           },
           { db }
         )
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 
@@ -310,7 +323,7 @@ describe("project service", () => {
       expect(permissions).toContain(ProjectPermission.PROJECT_READ_USERS);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       // Create a user with only read permission for this test
       const readOnlyEmail = `readonly-update-${Date.now()}@example.com`;
       const readOnlyUserId = (await queries.insertUser(db, {
@@ -335,7 +348,7 @@ describe("project service", () => {
           },
           { db }
         )
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 
@@ -412,7 +425,7 @@ describe("project service", () => {
       ).rejects.toThrow(ErrorCode.BAD_REQUEST);
     });
 
-    test("throws when actor lacks manage permission", async () => {
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
       // Add a user with only read permission to act as the actor
       const readOnlyEmail = `readonly-remove-${Date.now()}@example.com`;
       const readOnlyUserId = (await queries.insertUser(db, {
@@ -450,7 +463,7 @@ describe("project service", () => {
           },
           { db }
         )
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 
@@ -496,10 +509,10 @@ describe("project service", () => {
       expect(resultPage2.events[0]?.id).not.toBe(resultPage1.events[0]?.id);
     });
 
-    test("throws for user without read permission", async () => {
+    test("throws PROJECT_NOT_FOUND for user without read permission", async () => {
       expect(
         projectService.getProjectEvents({ projectId: testProjectId, actorUserId: nonMemberUserId }, { db })
-      ).rejects.toThrow(ErrorCode.FORBIDDEN);
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 });

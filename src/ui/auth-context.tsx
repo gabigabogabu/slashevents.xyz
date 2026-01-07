@@ -56,8 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const authenticatedRpc = React.useMemo(
-    () => createAuthenticatedAppRpc(getToken),
-    [getToken]
+    () => createAuthenticatedAppRpc(getToken, logout),
+    [getToken, logout]
   );
 
   const value = React.useMemo(
