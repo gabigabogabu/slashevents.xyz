@@ -3,20 +3,18 @@ import { isActivePath, usePathname } from "@/ui/router";
 import { PlaceholderPage } from "@/ui/placeholder";
 import { useAuth } from "@/ui/auth-context";
 import { LoginPage } from "@/ui/login";
-import { LayoutDashboard, Users, Loader2 } from "lucide-react";
+import { ProjectsPage } from "@/ui/projects";
+import { FolderOpen, Loader2 } from "lucide-react";
 
 const appNav = [
-  { to: "/app/dashboard", label: "Dashboard", icon: <LayoutDashboard className="size-4" /> },
-  { to: "/app/users", label: "Users", icon: <Users className="size-4" /> },
+  { to: "/app/projects", label: "Projects", icon: <FolderOpen className="size-4" /> },
 ] as const;
 
 function AppContent() {
   const pathname = usePathname();
 
-  if (isActivePath(pathname, "/app/users"))
-    return <PlaceholderPage title="Users" description="Invite users and manage account permissions." />;
-  if (isActivePath(pathname, "/app/dashboard"))
-    return <PlaceholderPage title="Dashboard" description="High-level account overview and recent activity." />;
+  if (isActivePath(pathname, "/app/projects"))
+    return <ProjectsPage />;
   
   return <PlaceholderPage title="Dashboard" description="High-level account overview and recent activity." />;
 }

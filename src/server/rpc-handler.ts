@@ -1,40 +1,41 @@
 import { z } from "zod";
 
+import { ErrorCode } from "@/lib/errors";
+
 export class RpcError extends Error {
-  constructor(message: string, name: string, public httpCode: number, cause?: unknown) {
-    super(message);
-    this.name = name;
-    this.cause = cause;
+  constructor(
+    code: ErrorCode,
+    public httpCode: number,
+    public hint?: string,
+  ) {
+    super(code);
+    this.name = code;
   }
 }
 
 class MethodNotDefinedError extends RpcError {
   constructor(method: string) {
-    super(`Method not defined: ${method}`, 'MethodNotDefinedError', 404);
-    this.name = 'MethodNotDefinedError';
+    super(ErrorCode.METHOD_NOT_DEFINED, 404, `Method not defined: ${method}`);
   }
 }
 
 class InvalidInputError extends RpcError {
   constructor(error: z.ZodError) {
-    super(`Invalid input: ${error.message}`, 'InvalidInputError', 400, error);
-    this.name = 'InvalidInputError';
+    super(ErrorCode.INVALID_INPUT, 400, error.message);
     this.cause = error;
   }
 }
 
 class AuthenticationError extends RpcError {
-  constructor(result: any) {
-    super(`Authentication failed: ${result}`, 'AuthenticationError', 401, result);
-    this.name = 'AuthenticationError';
+  constructor(result: unknown) {
+    super(ErrorCode.AUTHENTICATION_ERROR, 401, String(result));
     this.cause = result;
   }
 }
 
 class RateLimitError extends RpcError {
-  constructor(result: any) {
-    super(`Rate limit exceeded: ${result}`, 'RateLimitError', 429, result);
-    this.name = 'RateLimitError';
+  constructor(result: unknown) {
+    super(ErrorCode.RATE_LIMIT_EXCEEDED, 429, String(result));
     this.cause = result;
   }
 }
@@ -145,11 +146,16 @@ export class RpcHandler<RpcMap extends Record<string, RpcDef<any, any, any, any>
       const result = await this._handleSingleRpc(rpc);
       return {id: rpc.id, result};
     } catch (error) {
+      if (error instanceof RpcError) {
+        return {id: rpc.id, error: {
+          code: error.name,
+          hint: error.hint,
+        }};
+      }
       if (error instanceof Error) {
         return {id: rpc.id, error: {
-          name: error.name,
-          message: error.message,
-          cause: error.cause,
+          code: error.name,
+          hint: error.message,
         }};
       }
       return {id: rpc.id, error};

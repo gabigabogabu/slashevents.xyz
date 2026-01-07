@@ -40,45 +40,22 @@ Storage:
 
 ## DB Tables
 - Events
-- Accounts
 - Users
-- UserAccountPermissions
+- Projects
+- ProjectUserPermissions
+- ProjectEvents
 - ApiKeys
 
-An Event belongs to an Account
-Users belong to an Account
-A Users' permission to an Account is defined by UserAccountPermissions
-An ApiKey belongs to an Account
+An Event belongs to a Project
+Users can belong to multiple Projects
+A Users' permission to a Project is defined by ProjectUserPermissions
+A Project can have many ProjectEvents
+An ApiKey belongs to a Project
 An ApiKey's permissions are stored directly with the ApiKey
-
-
-### users (okta SSO? google SSO?)
-- uuid PK
-- email VARCHAR(255) NOT NULL UNIQUE
-- password_hash VARCHAR(255) NOT NULL
-- password_salt VARCHAR(32) NOT NULL
-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-
-### user_account_permissions 
-- uuid PK
-- user_id FK to users.id
-- account_id FK to accounts.id
-- permission ENUM('account_manage_user_permissions', 'account_manage_api_keys', 'account_manage_events') NOT NULL
-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-
-
-### accounts
-- uuid PK
-- name VARCHAR(255) NOT NULL
-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-
 
 ### events
 - uuid PK
-- account_id FK to accounts.id
+- project_id FK to projects.id
 - http_method ENUM('GET', 'POST', 'PUT', 'DELETE') NOT NULL
 - url VARCHAR(255) NOT NULL
 - headers JSONB NOT NULL
@@ -87,4 +64,4 @@ An ApiKey's permissions are stored directly with the ApiKey
 - received_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 
 
-See TODO.mdc for implementation plan.
+See `TODO.mdc` for implementation plan.

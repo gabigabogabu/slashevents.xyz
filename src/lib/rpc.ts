@@ -13,6 +13,18 @@ type ClientRPC<T> = {
     : never;
 };
 
+// Type that removes jwt from args for authenticated RPC calls
+type OmitJwtToken<T> = T extends { jwt: string } ? Omit<T, "jwt"> : T;
+type AuthenticatedClientRPC<T> = {
+  [K in keyof T]: T[K] extends (args: infer A) => infer R
+    ? IsUndefined<A> extends true
+      ? () => Promise<R>
+      : IsEmptyObject<OmitJwtToken<A>> extends true
+        ? (args?: OmitJwtToken<A>) => Promise<R>
+        : (args: OmitJwtToken<A>) => Promise<R>
+    : never;
+};
+
 export function createRpcClient<T>(
   callFn: (body: { id: string; method: string; params: unknown }[]) => Promise<string>
 ): ClientRPC<T> {
@@ -40,11 +52,9 @@ export function createRpcClient<T>(
     }
     if ("error" in match) {
       const err = match.error ?? {};
-      const e = new Error(`[${id}] ${method}: RPC error: ${err.message ?? "unknown error"}`, {
-        cause: err,
-      });
-      (e as any).name = err.name ?? "RPCError";
-      (e as any).cause = err.cause;
+      const e = new Error(err.code ?? "UNKNOWN_ERROR", { cause: err });
+      (e as any).name = err.code ?? "UNKNOWN_ERROR";
+      (e as any).hint = err.hint;
       (e as any).id = id;
       throw e;
     }
@@ -74,3 +84,22 @@ const fetchRpc = (endpoint: string) => async (body: { id: string; method: string
 export const appRpc = createRpcClient<AppRpc>(fetchRpc("/app-rpc"));
 export const adminRpc = createRpcClient<AdminRpc>(fetchRpc("/admin-rpc"));
 export const apiRpc = createRpcClient<ApiRpc>(fetchRpc("/api-rpc"));
+
+// Create an authenticated RPC client that automatically injects JWT token
+export function createAuthenticatedAppRpc(getToken: () => string | null): AuthenticatedClientRPC<AppRpc> {
+  return new Proxy({} as AuthenticatedClientRPC<AppRpc>, {
+    get: (_target, prop) => {
+      if (typeof prop !== "string") return undefined;
+      const method = prop as keyof AppRpc;
+      return async (args: Record<string, unknown> = {}) => {
+        const token = getToken();
+        if (!token) {
+          throw new Error("Not authenticated");
+        }
+        // Type assertion needed because we're dynamically calling methods
+        const rpcMethod = appRpc[method] as (args: Record<string, unknown>) => Promise<unknown>;
+        return rpcMethod({ ...args, jwt: token });
+      };
+    },
+  });
+}

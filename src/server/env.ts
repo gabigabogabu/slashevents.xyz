@@ -1,10 +1,14 @@
 import zod from "zod";
 
+// Transform to replace escaped newlines with actual newlines (for PEM keys in .env files)
+const pemKeyTransform = zod.string().transform((val) => val.replace(/\\n/g, "\n"));
+
 const envSchema = zod.object({
   NODE_ENV: zod.enum(["development", "production"]),
   PORT: zod.coerce.number().default(3000),
   DATABASE_URL: zod.string(),
-  JWT_PRIVATE_KEY: zod.string(),
+  JWT_PRIVATE_KEY: pemKeyTransform,
+  JWT_PUBLIC_KEY: pemKeyTransform,
 });
 
 export type Env = zod.infer<typeof envSchema>;

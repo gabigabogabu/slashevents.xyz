@@ -7,3 +7,7 @@ alwaysApply: true
 - Simple is usually better, don't overcomplicate things.
 - If the approach to fixing a bug is changed, try to remove the code for the old approach.
 - If you find other unused code, ask to remove it after you've completed your task, the user will usually agree.
+- Don't use offset for pagination, use a cursor instead.
+- Don't return `{ success: true }` or `{ success: false }` or similar, just return void or throw an error.
+- Function parameters should roughly have the structure `params: { ... }, di: {db: SQL}`.
+- Error messages should be machine readable/constants in the backend and mapped to human readable strings in the frontend.

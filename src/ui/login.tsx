@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/errors";
 import { Link } from "@/ui/router";
 import { useAuth } from "@/ui/auth-context";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -39,12 +40,8 @@ export function LoginPage() {
       } else {
         await signup(email, password);
       }
-    } catch (err: any) {
-      if (err?.name === "INVALID_CREDENTIALS") {
-        setError("Invalid email or password. Please try again.");
-      } else {
-        setError(err instanceof Error ? err.message : "An error occurred");
-      }
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setIsLoading(false);
     }

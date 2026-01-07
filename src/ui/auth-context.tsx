@@ -1,5 +1,5 @@
 import * as React from "react";
-import { appRpc } from "@/lib/rpc";
+import { appRpc, createAuthenticatedAppRpc } from "@/lib/rpc";
 
 const JWT_STORAGE_KEY = "slashevents.io-jwt";
 
@@ -13,6 +13,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  authenticatedRpc: ReturnType<typeof createAuthenticatedAppRpc>;
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
@@ -31,15 +32,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = React.useCallback(async (email: string, password: string) => {
-    const { jwtToken } = await appRpc.userLogin({ email, password });
-    localStorage.setItem(JWT_STORAGE_KEY, jwtToken);
-    setState({ status: "authenticated", token: jwtToken });
+    const { jwt } = await appRpc.userLogin({ email, password });
+    localStorage.setItem(JWT_STORAGE_KEY, jwt);
+    setState({ status: "authenticated", token: jwt });
   }, []);
 
   const signup = React.useCallback(async (email: string, password: string) => {
-    const { jwtToken } = await appRpc.userSignup({ email, password });
-    localStorage.setItem(JWT_STORAGE_KEY, jwtToken);
-    setState({ status: "authenticated", token: jwtToken });
+    const { jwt } = await appRpc.userSignup({ email, password });
+    localStorage.setItem(JWT_STORAGE_KEY, jwt);
+    setState({ status: "authenticated", token: jwt });
   }, []);
 
   const logout = React.useCallback(() => {
@@ -47,9 +48,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ status: "unauthenticated" });
   }, []);
 
+  const getToken = React.useCallback(() => {
+    if (state.status === "authenticated") {
+      return state.token;
+    }
+    return localStorage.getItem(JWT_STORAGE_KEY);
+  }, [state]);
+
+  const authenticatedRpc = React.useMemo(
+    () => createAuthenticatedAppRpc(getToken),
+    [getToken]
+  );
+
   const value = React.useMemo(
-    () => ({ state, login, signup, logout }),
-    [state, login, signup, logout]
+    () => ({ state, login, signup, logout, authenticatedRpc }),
+    [state, login, signup, logout, authenticatedRpc]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
