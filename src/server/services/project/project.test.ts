@@ -64,11 +64,11 @@ describe("project service", () => {
         { db }
       );
 
-      const events = await queries.getProjectActivityEvents(db, { project_id: result.projectId });
+      const events = await queries.getEvents(db, { project_id: result.projectId, type: EventType.PROJECT_CREATED });
       const createEvent = events.find((e) => e.type === EventType.PROJECT_CREATED);
 
       expect(createEvent).toBeDefined();
-      expect(createEvent?.data.name).toEqual("Event Test Project");
+      expect((createEvent?.data as any).name).toEqual("Event Test Project");
     });
 
     test("grants creator full permissions", async () => {
@@ -92,10 +92,9 @@ describe("project service", () => {
         { db }
       );
 
-      const events = await queries.getProjectActivityEvents(db, { project_id: result.projectId });
-      const grantEvents = events.filter((e) => e.type === EventType.PROJECT_USER_PERMISSION_GRANTED);
+      const events = await queries.getEvents(db, { project_id: result.projectId, type: EventType.PROJECT_USER_PERMISSION_GRANTED });
 
-      expect(grantEvents.length).toBe(3);
+      expect(events.length).toBe(3);
     });
 
     test("throws AUTHENTICATION_ERROR when actor user does not exist", async () => {

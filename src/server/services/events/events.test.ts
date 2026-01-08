@@ -52,15 +52,16 @@ describe("events service", () => {
       expect("error" in result).toBe(false);
 
       // Verify the event was stored
-      const events = await queries.getWebhookEvents(db, { project_id: testProjectId });
+      const events = await queries.getEvents(db, { project_id: testProjectId, type: EventType.WEBHOOK_RECEIVED });
       expect(events.length).toBeGreaterThanOrEqual(1);
-      const event = events.find(e => e.data.path === "/webhook/test");
+      const event = events.find(e => (e.data as any).path === "/webhook/test");
       expect(event).toBeDefined();
-      expect(event!.data.httpMethod).toBe(HttpMethod.POST);
-      expect(event!.data.body).toBe('{"hello": "world"}');
-      expect(event!.data.queryString).toBe("foo=bar");
-      expect(event!.data.sourceIp).toBe("192.168.1.1");
-      expect(event!.data.headers).toEqual({ "content-type": "application/json" });
+      const data = event!.data as any;
+      expect(data.httpMethod).toBe(HttpMethod.POST);
+      expect(data.body).toBe('{"hello": "world"}');
+      expect(data.queryString).toBe("foo=bar");
+      expect(data.sourceIp).toBe("192.168.1.1");
+      expect(data.headers).toEqual({ "content-type": "application/json" });
     });
 
     test("returns error for non-existent project", async () => {
@@ -109,11 +110,12 @@ describe("events service", () => {
 
       expect(result).toHaveProperty("eventId");
 
-      const events = await queries.getWebhookEvents(db, { project_id: testProjectId });
-      const event = events.find(e => e.data.path === "/api/status");
+      const events = await queries.getEvents(db, { project_id: testProjectId, type: EventType.WEBHOOK_RECEIVED });
+      const event = events.find(e => (e.data as any).path === "/api/status");
       expect(event).toBeDefined();
-      expect(event!.data.httpMethod).toBe(HttpMethod.GET);
-      expect(event!.data.body).toBeNull();
+      const data = event!.data as any;
+      expect(data.httpMethod).toBe(HttpMethod.GET);
+      expect(data.body).toBeNull();
     });
   });
 
