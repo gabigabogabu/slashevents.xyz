@@ -83,6 +83,8 @@ describe("project service", () => {
 
       expect(permissions).toContain(ProjectPermission.PROJECT_MANAGE_USERS);
       expect(permissions).toContain(ProjectPermission.PROJECT_READ_USERS);
+      expect(permissions).toContain(ProjectPermission.PROJECT_READ_EVENTS);
+      expect(permissions).toContain(ProjectPermission.PROJECT_READ_API_KEY);
     });
 
     test("logs PERMISSION_GRANTED events for initial permissions", async () => {
@@ -93,7 +95,7 @@ describe("project service", () => {
 
       const events = await queries.getEvents(db, { project_id: result.projectId, type: EventType.PROJECT_USER_PERMISSION_GRANTED });
 
-      expect(events.length).toBe(3);
+      expect(events.length).toBe(4);
     });
 
     test("throws AUTHENTICATION_ERROR when actor user does not exist", async () => {

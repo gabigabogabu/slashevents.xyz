@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/errors";
 import { EventType } from "@/lib/event-types";
-import { Plus, Users, Trash2, FolderOpen, Loader2, ArrowLeft, UserPlus, Shield, Eye, History, UserMinus, KeyRound, Webhook, ChevronRight, Globe, Clock, FileJson } from "lucide-react";
+import { Copy, EyeOff, Plus, Users, Trash2, FolderOpen, Loader2, ArrowLeft, UserPlus, Shield, Eye, History, UserMinus, KeyRound, Webhook, ChevronRight, Globe, Clock, FileJson } from "lucide-react";
 
 type Project = {
   id: string;
@@ -15,7 +15,11 @@ type Project = {
   createdAt: string;
 };
 
-type ProjectPermission = "PROJECT_MANAGE_USERS" | "PROJECT_READ_USERS" | "PROJECT_READ_EVENTS";
+type ProjectPermission =
+  | "PROJECT_MANAGE_USERS"
+  | "PROJECT_READ_USERS"
+  | "PROJECT_READ_EVENTS"
+  | "PROJECT_READ_API_KEY";
 
 type ProjectUser = {
   userId: string;
@@ -253,6 +257,10 @@ function ProjectDetail({ project }: { project: Project }) {
   const [users, setUsers] = React.useState<ProjectUser[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = React.useState(false);
+  const [apiKey, setApiKey] = React.useState<string | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = React.useState(false);
+  const [apiKeyError, setApiKeyError] = React.useState<string | null>(null);
 
   const fetchUsers = React.useCallback(async () => {
     try {
@@ -270,6 +278,33 @@ function ProjectDetail({ project }: { project: Project }) {
   React.useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  const toggleApiKey = React.useCallback(async () => {
+    if (showApiKey) {
+      setShowApiKey(false);
+      return;
+    }
+
+    setApiKeyError(null);
+    setShowApiKey(true);
+    if (apiKey) return;
+
+    try {
+      setApiKeyLoading(true);
+      const result = await authenticatedRpc.getProjectApiKey({ projectId: project.id });
+      setApiKey(result.apiKey);
+    } catch (err) {
+      setApiKeyError(getErrorMessage(err));
+      setShowApiKey(false);
+    } finally {
+      setApiKeyLoading(false);
+    }
+  }, [apiKey, authenticatedRpc, project.id, showApiKey]);
+
+  const copyApiKey = React.useCallback(async () => {
+    if (!apiKey) return;
+    await navigator.clipboard.writeText(apiKey);
+  }, [apiKey]);
 
   return (
     <div className="space-y-6">
@@ -290,6 +325,46 @@ function ProjectDetail({ project }: { project: Project }) {
             Manage users and their permissions for this project.
           </CardDescription>
         </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="size-5" />
+            API Key
+          </CardTitle>
+          <CardDescription>
+            Use this key to read events via the API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Input
+              value={apiKey ?? ""}
+              readOnly
+              placeholder={apiKeyLoading ? "Loading..." : "Hidden"}
+              type={showApiKey ? "text" : "password"}
+            />
+            <Button variant="outline" onClick={toggleApiKey} disabled={apiKeyLoading}>
+              {showApiKey ? (
+                <>
+                  <EyeOff className="size-4 mr-2" />
+                  Hide
+                </>
+              ) : (
+                <>
+                  <Eye className="size-4 mr-2" />
+                  Show
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={copyApiKey} disabled={!apiKey}>
+              <Copy className="size-4 mr-2" />
+              Copy
+            </Button>
+          </div>
+          {apiKeyError && <p className="text-sm text-destructive">{apiKeyError}</p>}
+        </CardContent>
       </Card>
 
       <AddUserForm projectId={project.id} onAdded={fetchUsers} />
@@ -438,6 +513,16 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
               <Shield className="size-4" />
               <span className="text-sm">Manage Users</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={permissions.includes("PROJECT_READ_API_KEY")}
+                onChange={() => togglePermission("PROJECT_READ_API_KEY")}
+                className="rounded border-gray-300"
+              />
+              <KeyRound className="size-4" />
+              <span className="text-sm">Read API Key</span>
+            </label>
           </div>
           
           <Button type="submit" disabled={loading || !email.trim() || permissions.length === 0}>
@@ -548,6 +633,17 @@ function UserRow({
             />
             <Shield className="size-3" />
             <span>Manage</span>
+          </label>
+          <label className="flex items-center gap-1 cursor-pointer text-xs">
+            <input
+              type="checkbox"
+              checked={user.permissions.includes("PROJECT_READ_API_KEY")}
+              onChange={() => togglePermission("PROJECT_READ_API_KEY")}
+              disabled={loading}
+              className="rounded border-gray-300"
+            />
+            <KeyRound className="size-3" />
+            <span>API Key</span>
           </label>
         </div>
         {error && (
@@ -816,8 +912,11 @@ function ActivityLog({ projectId }: { projectId: string }) {
   const getEventDescription = (event: ProjectActivityEvent) => {
     const targetEmail = event.data.targetEmail;
     const permission = event.data.permission;
-    const permissionLabel = permission === "PROJECT_MANAGE_USERS" ? "Manage Users" : 
-                            permission === "PROJECT_READ_EVENTS" ? "Read Events" : "Read Users";
+    const permissionLabel =
+      permission === "PROJECT_MANAGE_USERS" ? "Manage Users" :
+      permission === "PROJECT_READ_EVENTS" ? "Read Events" :
+      permission === "PROJECT_READ_API_KEY" ? "Read API Key" :
+      "Read Users";
     
     switch (event.type) {
       case "PROJECT_CREATED":

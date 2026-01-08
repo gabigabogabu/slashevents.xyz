@@ -13,6 +13,7 @@ import * as projectService from "./services/project/project";
 import * as eventsService from "./services/events/events";
 import { ProjectPermission, checkUserHasProjectPermission } from "./db/queries/project";
 import { EventType } from "@/lib/event-types";
+import { apiKeyHasReadEventsPermission, checkApiKeyJwt, createApiKeyJwt } from "./services/api-keys/api-keys";
 export { EventType };
 
 enum HttpStatus {
@@ -54,7 +55,7 @@ const withAuth = <P extends { jwt: string }, R>(
 ) => {
   return async ({ params }: { params: P }): Promise<R> => {
     const { jwt, ...rest } = params;
-    const { userId: actorUserId } = checkUserJwt(jwt, env.JWT_PUBLIC_KEY);
+    const { userId: actorUserId } = checkUserJwt(jwt, env.APP_JWT_PUBLIC_KEY);
     return handler({
       ...rest,
       actorUserId,
@@ -64,7 +65,7 @@ const withAuth = <P extends { jwt: string }, R>(
 
 const handleJwt = <P extends { jwt: string }>(params: P) => {
   const { jwt, ...rest } = params;
-  const { userId: actorUserId } = checkUserJwt(jwt, env.JWT_PUBLIC_KEY);
+  const { userId: actorUserId } = checkUserJwt(jwt, env.APP_JWT_PUBLIC_KEY);
   return {
     ...rest,
     actorUserId,
@@ -189,6 +190,24 @@ const _appRpcHandler = new RpcHandler({
       }, { db })
     },
   }),
+  getProjectApiKey: defRpc({
+    inputValidation: jwtSchema.extend({
+      projectId: z.uuid(),
+    }),
+    handle: async ({ params }) => {
+      const authedParams = handleJwt(params);
+      const hasPermission = await checkUserHasProjectPermission(db, {
+        project_id: authedParams.projectId as UUID,
+        user_id: authedParams.actorUserId,
+        permission: ProjectPermission.PROJECT_READ_API_KEY,
+      });
+      if (!hasPermission) {
+        throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
+      }
+      const apiKey = createApiKeyJwt({ projectId: authedParams.projectId as UUID }, env.API_JWT_PRIVATE_KEY);
+      return { apiKey };
+    },
+  }),
 });
 
 export const appRpc = handleBunServe(_appRpcHandler);
@@ -198,7 +217,31 @@ const _adminRpcHandler = new RpcHandler({});
 export const adminRpc = handleBunServe(_adminRpcHandler);
 export type AdminRpc = typeof adminRpc._rpcType;
 
-const _apiRpcHandler = new RpcHandler({});
+const _apiRpcHandler = new RpcHandler({
+  getEvents: defRpc({
+    inputValidation: z.object({
+      apiKey: z.string(),
+      type: z.nativeEnum(EventType).optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+      cursor: z.uuid().optional(),
+    }),
+    handle: async ({ params }) => {
+      const claims = checkApiKeyJwt(params.apiKey, env.API_JWT_PUBLIC_KEY);
+      if (!apiKeyHasReadEventsPermission(claims)) {
+        throw new RpcError(ErrorCode.FORBIDDEN, 403);
+      }
+      return eventsService.getEvents(
+        {
+          projectId: claims.projectId as UUID,
+          type: params.type,
+          limit: params.limit,
+          cursor: params.cursor as UUID | undefined,
+        },
+        { db }
+      );
+    },
+  }),
+});
 export const apiRpc = handleBunServe(_apiRpcHandler);
 export type ApiRpc = typeof apiRpc._rpcType;
 

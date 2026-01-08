@@ -13,12 +13,20 @@ const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", {
   privateKeyEncoding: { type: "pkcs8", format: "pem" },
 });
 
+const { privateKey: apiPrivateKey, publicKey: apiPublicKey } = crypto.generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+});
+
 const testEnv: Env = {
   NODE_ENV: "development",
   PORT: 3000,
   DATABASE_URL: "postgres://test:test@localhost:5432/test",
-  JWT_PRIVATE_KEY: privateKey,
-  JWT_PUBLIC_KEY: publicKey,
+  APP_JWT_PRIVATE_KEY: privateKey,
+  APP_JWT_PUBLIC_KEY: publicKey,
+  API_JWT_PRIVATE_KEY: apiPrivateKey,
+  API_JWT_PUBLIC_KEY: apiPublicKey,
 };
 
 describe("user auth", () => {
@@ -56,7 +64,7 @@ describe("user auth", () => {
 
     // Verify the JWT - this would have failed with "jwt.verify is not a function"
     // if the parameter name shadowed the jwt library import
-    const decoded = checkUserJwt(jwt, testEnv.JWT_PUBLIC_KEY);
+    const decoded = checkUserJwt(jwt, testEnv.APP_JWT_PUBLIC_KEY);
 
     expect(decoded.userId).toBeDefined();
     expect(typeof decoded.userId).toBe("string");
@@ -71,7 +79,7 @@ describe("user auth", () => {
     expect(result.jwt).toBeDefined();
 
     // Verify the login JWT works
-    const decoded = checkUserJwt(result.jwt, testEnv.JWT_PUBLIC_KEY);
+    const decoded = checkUserJwt(result.jwt, testEnv.APP_JWT_PUBLIC_KEY);
     expect(decoded.userId).toBeDefined();
   });
 
@@ -94,6 +102,6 @@ describe("user auth", () => {
   });
 
   test("checkUserJwt throws for invalid JWT", async () => {
-    expect(() => checkUserJwt("invalid-token", testEnv.JWT_PUBLIC_KEY)).toThrow();
+    expect(() => checkUserJwt("invalid-token", testEnv.APP_JWT_PUBLIC_KEY)).toThrow();
   });
 });

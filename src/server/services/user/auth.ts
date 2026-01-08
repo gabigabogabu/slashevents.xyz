@@ -33,7 +33,7 @@ export const userSignup = async (
   });
   if (!userId)
     throw new RpcError(ErrorCode.INTERNAL_SERVER_ERROR, 500, "Failed to create user");
-  const jwt = signUserJwt(userId, env.JWT_PRIVATE_KEY);
+  const jwt = signUserJwt(userId, env.APP_JWT_PRIVATE_KEY);
   return { jwt };
 }
 
@@ -55,7 +55,7 @@ export const userLogin = async (
   if (!isPasswordValid || !foundUser?.id) {
     throw new RpcError(ErrorCode.INVALID_CREDENTIALS, 401);
   };
-  const jwt = signUserJwt(foundUser?.id, env.JWT_PRIVATE_KEY);
+  const jwt = signUserJwt(foundUser?.id, env.APP_JWT_PRIVATE_KEY);
   return { jwt };
 }
 

@@ -5,7 +5,8 @@ export default async (db: SQL) => {
     CREATE TYPE app.project_permission AS ENUM (
       'PROJECT_MANAGE_USERS',
       'PROJECT_READ_USERS',
-      'PROJECT_READ_EVENTS'
+      'PROJECT_READ_EVENTS',
+      'PROJECT_READ_API_KEY'
     );
   EXCEPTION
     WHEN duplicate_object THEN null;

@@ -38,6 +38,12 @@ Everything is in this one server to build the MVP. This server will host multipl
 Storage:
 - A postgres DB (locally running in a container. psql is available to inspect the local db)
 
+## Environment variables
+
+- `DATABASE_URL`: Postgres connection string
+- `APP_JWT_PRIVATE_KEY` / `APP_JWT_PUBLIC_KEY`: RS256 keypair used for user session JWTs
+- `API_JWT_PRIVATE_KEY` / `API_JWT_PUBLIC_KEY`: RS256 keypair used for API key JWTs (project-scoped)
+
 ## DB Tables
 - Events
 - Users

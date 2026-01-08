@@ -41,7 +41,12 @@ export const createProject = async (
   await permissionsService.grantInitialPermissions({
     projectId,
     creatorUserId: actorUserId,
-    permissions: [ProjectPermission.PROJECT_MANAGE_USERS, ProjectPermission.PROJECT_READ_USERS, ProjectPermission.PROJECT_READ_EVENTS],
+    permissions: [
+      ProjectPermission.PROJECT_MANAGE_USERS,
+      ProjectPermission.PROJECT_READ_USERS,
+      ProjectPermission.PROJECT_READ_EVENTS,
+      ProjectPermission.PROJECT_READ_API_KEY,
+    ],
   }, di);
 
   return { projectId };
