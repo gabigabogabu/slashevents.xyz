@@ -15,7 +15,7 @@ type Project = {
   createdAt: string;
 };
 
-type ProjectPermission = "project_manage_users" | "project_read_users" | "project_read_events";
+type ProjectPermission = "PROJECT_MANAGE_USERS" | "PROJECT_READ_USERS" | "PROJECT_READ_EVENTS";
 
 type ProjectUser = {
   userId: string;
@@ -24,11 +24,11 @@ type ProjectUser = {
 };
 
 type ProjectActivityEventType = 
-  | "project.created"
-  | "project.user.added"
-  | "project.user.removed"
-  | "project.user.permission.granted"
-  | "project.user.permission.revoked";
+  | "PROJECT_CREATED"
+  | "PROJECT_USER_ADDED"
+  | "PROJECT_USER_REMOVED"
+  | "PROJECT_USER_PERMISSION_GRANTED"
+  | "PROJECT_USER_PERMISSION_REVOKED";
 
 type ProjectActivityEvent = {
   id: string;
@@ -49,7 +49,7 @@ type ProjectActivityEvent = {
 
 type WebhookEvent = {
   id: string;
-  type: "webhook.received";
+  type: EventType.WEBHOOK_RECEIVED;
   httpMethod: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
   path: string;
   headers: Record<string, string>;
@@ -346,7 +346,7 @@ function ProjectDetail({ project }: { project: Project }) {
 function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () => void }) {
   const { authenticatedRpc } = useAuth();
   const [email, setEmail] = React.useState("");
-  const [permissions, setPermissions] = React.useState<ProjectPermission[]>(["project_read_users", "project_read_events"]);
+  const [permissions, setPermissions] = React.useState<ProjectPermission[]>(["PROJECT_READ_USERS", "PROJECT_READ_EVENTS"]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -364,7 +364,7 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
         permissions,
       });
       setEmail("");
-      setPermissions(["project_read_users", "project_read_events"]);
+      setPermissions(["PROJECT_READ_USERS", "PROJECT_READ_EVENTS"]);
       onAdded();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -411,8 +411,8 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={permissions.includes("project_read_users")}
-                onChange={() => togglePermission("project_read_users")}
+                checked={permissions.includes("PROJECT_READ_USERS")}
+                onChange={() => togglePermission("PROJECT_READ_USERS")}
                 className="rounded border-gray-300"
               />
               <Eye className="size-4" />
@@ -421,8 +421,8 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={permissions.includes("project_read_events")}
-                onChange={() => togglePermission("project_read_events")}
+                checked={permissions.includes("PROJECT_READ_EVENTS")}
+                onChange={() => togglePermission("PROJECT_READ_EVENTS")}
                 className="rounded border-gray-300"
               />
               <History className="size-4" />
@@ -431,8 +431,8 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={permissions.includes("project_manage_users")}
-                onChange={() => togglePermission("project_manage_users")}
+                checked={permissions.includes("PROJECT_MANAGE_USERS")}
+                onChange={() => togglePermission("PROJECT_MANAGE_USERS")}
                 className="rounded border-gray-300"
               />
               <Shield className="size-4" />
@@ -519,8 +519,8 @@ function UserRow({
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
-              checked={user.permissions.includes("project_read_users")}
-              onChange={() => togglePermission("project_read_users")}
+              checked={user.permissions.includes("PROJECT_READ_USERS")}
+              onChange={() => togglePermission("PROJECT_READ_USERS")}
               disabled={loading}
               className="rounded border-gray-300"
             />
@@ -530,8 +530,8 @@ function UserRow({
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
-              checked={user.permissions.includes("project_read_events")}
-              onChange={() => togglePermission("project_read_events")}
+              checked={user.permissions.includes("PROJECT_READ_EVENTS")}
+              onChange={() => togglePermission("PROJECT_READ_EVENTS")}
               disabled={loading}
               className="rounded border-gray-300"
             />
@@ -541,8 +541,8 @@ function UserRow({
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
-              checked={user.permissions.includes("project_manage_users")}
-              onChange={() => togglePermission("project_manage_users")}
+              checked={user.permissions.includes("PROJECT_MANAGE_USERS")}
+              onChange={() => togglePermission("PROJECT_MANAGE_USERS")}
               disabled={loading}
               className="rounded border-gray-300"
             />
@@ -593,7 +593,7 @@ function WebhookEvents({ projectId }: { projectId: string }) {
         limit,
         cursor: cursorId,
       });
-      const webhookEvents = result.events.filter((e) => e.type === "webhook.received") as WebhookEvent[];
+      const webhookEvents = result.events.filter((e) => e.type === EventType.WEBHOOK_RECEIVED) as WebhookEvent[];
       if (append) {
         setEvents(prev => [...prev, ...webhookEvents]);
       } else {
@@ -782,7 +782,7 @@ function ActivityLog({ projectId }: { projectId: string }) {
       setLoading(true);
       setError(null);
       const result = await authenticatedRpc.getEvents({ projectId, limit: 20 });
-      const activityEvents = result.events.filter((e) => e.type.startsWith("project.")) as ProjectActivityEvent[];
+      const activityEvents = result.events.filter((e) => e.type.startsWith("PROJECT_")) as ProjectActivityEvent[];
       setEvents(activityEvents);
       setTotal(result.total);
     } catch (err) {
@@ -798,15 +798,15 @@ function ActivityLog({ projectId }: { projectId: string }) {
 
   const getEventIcon = (eventType: ProjectActivityEvent["type"]) => {
     switch (eventType) {
-      case "project.created":
+      case "PROJECT_CREATED":
         return <FolderOpen className="size-4 text-green-500" />;
-      case "project.user.added":
+      case "PROJECT_USER_ADDED":
         return <UserPlus className="size-4 text-blue-500" />;
-      case "project.user.removed":
+      case "PROJECT_USER_REMOVED":
         return <UserMinus className="size-4 text-red-500" />;
-      case "project.user.permission.granted":
+      case "PROJECT_USER_PERMISSION_GRANTED":
         return <KeyRound className="size-4 text-green-500" />;
-      case "project.user.permission.revoked":
+      case "PROJECT_USER_PERMISSION_REVOKED":
         return <KeyRound className="size-4 text-orange-500" />;
       default:
         return <History className="size-4 text-muted-foreground" />;
@@ -816,19 +816,19 @@ function ActivityLog({ projectId }: { projectId: string }) {
   const getEventDescription = (event: ProjectActivityEvent) => {
     const targetEmail = event.data.targetEmail;
     const permission = event.data.permission;
-    const permissionLabel = permission === "project_manage_users" ? "Manage Users" : 
-                            permission === "project_read_events" ? "Read Events" : "Read Users";
+    const permissionLabel = permission === "PROJECT_MANAGE_USERS" ? "Manage Users" : 
+                            permission === "PROJECT_READ_EVENTS" ? "Read Events" : "Read Users";
     
     switch (event.type) {
-      case "project.created":
+      case "PROJECT_CREATED":
         return <><span className="font-medium">{event.actorEmail}</span> created the project</>;
-      case "project.user.added":
+      case "PROJECT_USER_ADDED":
         return <><span className="font-medium">{event.actorEmail}</span> added <span className="font-medium">{targetEmail ?? "a user"}</span> to the project</>;
-      case "project.user.removed":
+      case "PROJECT_USER_REMOVED":
         return <><span className="font-medium">{event.actorEmail}</span> removed <span className="font-medium">{targetEmail ?? "a user"}</span> from the project</>;
-      case "project.user.permission.granted":
+      case "PROJECT_USER_PERMISSION_GRANTED":
         return <><span className="font-medium">{event.actorEmail}</span> granted <span className="font-medium">{permissionLabel}</span> to <span className="font-medium">{targetEmail ?? "a user"}</span></>;
-      case "project.user.permission.revoked":
+      case "PROJECT_USER_PERMISSION_REVOKED":
         return <><span className="font-medium">{event.actorEmail}</span> revoked <span className="font-medium">{permissionLabel}</span> from <span className="font-medium">{targetEmail ?? "a user"}</span></>;
       default:
         return <span>Unknown event</span>;

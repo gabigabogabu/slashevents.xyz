@@ -3,12 +3,12 @@ import type { SQL } from "bun";
 export default async (db: SQL) => {
   await db`DO $$ BEGIN
     CREATE TYPE app.event_type AS ENUM (
-      'webhook.received',
-      'project.created',
-      'project.user.added',
-      'project.user.removed',
-      'project.user.permission.granted',
-      'project.user.permission.revoked'
+      'WEBHOOK_RECEIVED',
+      'PROJECT_CREATED',
+      'PROJECT_USER_ADDED',
+      'PROJECT_USER_REMOVED',
+      'PROJECT_USER_PERMISSION_GRANTED',
+      'PROJECT_USER_PERMISSION_REVOKED'
     );
   EXCEPTION
     WHEN duplicate_object THEN null;

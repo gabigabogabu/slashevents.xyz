@@ -14,3 +14,4 @@ alwaysApply: true
 - Most if not all pages should have their own URL.
 - When asked to fix an error, first add a test case to reproduce it and then fix it.
 - Only write useful comments. Comments which just repeat the code can be removed.
+- Enums should be ALL_CAPS, also in the DB.

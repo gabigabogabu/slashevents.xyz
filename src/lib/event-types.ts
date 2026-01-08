@@ -1,16 +1,13 @@
-// Shared event type definitions used by both frontend and backend
-// All event types use dot-separated naming
-
 export enum EventType {
-  WEBHOOK_RECEIVED = "webhook.received",
-  PROJECT_CREATED = "project.created",
-  PROJECT_USER_ADDED = "project.user.added",
-  PROJECT_USER_REMOVED = "project.user.removed",
-  PROJECT_USER_PERMISSION_GRANTED = "project.user.permission.granted",
-  PROJECT_USER_PERMISSION_REVOKED = "project.user.permission.revoked",
+  WEBHOOK_RECEIVED = "WEBHOOK_RECEIVED",
+  PROJECT_CREATED = "PROJECT_CREATED",
+  PROJECT_USER_ADDED = "PROJECT_USER_ADDED",
+  PROJECT_USER_REMOVED = "PROJECT_USER_REMOVED",
+  PROJECT_USER_PERMISSION_GRANTED = "PROJECT_USER_PERMISSION_GRANTED",
+  PROJECT_USER_PERMISSION_REVOKED = "PROJECT_USER_PERMISSION_REVOKED",
 }
 
 export const isWebhookEvent = (type: EventType): boolean => {
-  return type.startsWith("webhook.");
+  return type.startsWith("WEBHOOK_");
 };
 

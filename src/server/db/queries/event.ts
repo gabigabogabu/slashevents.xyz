@@ -59,7 +59,7 @@ export const insertWebhookEvent = async (
 ): Promise<UUID | undefined> => {
   const res = await db`
     INSERT INTO events (project_id, type, data)
-    VALUES (${params.project_id}, 'webhook.received', ${params.data})
+    VALUES (${params.project_id}, ${EventType.WEBHOOK_RECEIVED}, ${params.data})
     RETURNING id;
   ` as { id: UUID }[];
   return res[0]?.id;

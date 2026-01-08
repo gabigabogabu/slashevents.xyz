@@ -2,9 +2,9 @@ import type { SQL } from "bun";
 import type { UUID } from "crypto";
 
 export enum ProjectPermission {
-  PROJECT_MANAGE_USERS = "project_manage_users",
-  PROJECT_READ_USERS = "project_read_users",
-  PROJECT_READ_EVENTS = "project_read_events",
+  PROJECT_MANAGE_USERS = "PROJECT_MANAGE_USERS",
+  PROJECT_READ_USERS = "PROJECT_READ_USERS",
+  PROJECT_READ_EVENTS = "PROJECT_READ_EVENTS",
 }
 
 type ProjectDbRow = {
