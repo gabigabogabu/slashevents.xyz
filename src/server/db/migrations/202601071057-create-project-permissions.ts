@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 
 export default async (db: SQL) => {
   await db`DO $$ BEGIN
-    CREATE TYPE app.project_permission AS ENUM ('project_manage_users', 'project_read_users');
+    CREATE TYPE app.project_permission AS ENUM ('project_manage_users', 'project_read_users', 'project_read_events');
   EXCEPTION
     WHEN duplicate_object THEN null;
   END $$`;

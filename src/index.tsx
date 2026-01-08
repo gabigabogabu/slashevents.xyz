@@ -2,6 +2,7 @@ import { serve } from "bun";
 import index from "./index.html";
 import * as s from "./server";
 export type { AppRpc, AdminRpc, ApiRpc } from "./server";
+export { EventType } from "./server";
 
 const server = serve({
   routes: {
@@ -18,10 +19,15 @@ const server = serve({
     "/api-rpc": s.apiRpc,
 
     // world-facing API for ingestion, webhooks should land here
-    "/inggress/:customerId/l/:latchId": (req) => {
-      // TODO: implement account creation
-      // TODO: store the webhook
-      return new Response("ingestion");
+    "/ingress/:projectId/*": (req, server) => {
+      const url = new URL(req.url);
+      const pathParts = url.pathname.split("/");
+      // Path format: /ingress/:projectId/rest/of/path
+      const projectId = pathParts[2];
+      if (!projectId)
+        return new Response(JSON.stringify({ error: "WRONG_INGRESS_PATH" }), { status: 400 });
+      const restOfPath = pathParts.slice(3).join("/");
+      return s.handleWebhook(req, server, projectId, restOfPath);
     },
 
     "/health/liveness": s.isAppAlive,

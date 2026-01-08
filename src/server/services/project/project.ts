@@ -5,7 +5,7 @@ import { ErrorCode } from "@/lib/errors";
 import { RpcError } from "@/server/rpc-handler";
 import * as queries from "@/server/db/queries";
 import { ProjectPermission } from "@/server/db/queries/project";
-import { ProjectEventType } from "@/server/db/queries/project-event";
+import { EventType } from "@/server/db/queries/event";
 import * as permissionsService from "./permissions";
 
 export const createProject = async (
@@ -30,10 +30,10 @@ export const createProject = async (
   }
 
   // Log project creation event
-  await queries.insertProjectEvent(db, {
+  await queries.insertProjectActivityEvent(db, {
     project_id: projectId,
     actor_user_id: actorUserId,
-    event_type: ProjectEventType.PROJECT_CREATED,
+    event_type: EventType.PROJECT_CREATED,
     metadata: { name },
   });
 
@@ -41,7 +41,7 @@ export const createProject = async (
   await permissionsService.grantInitialPermissions({
     projectId,
     creatorUserId: actorUserId,
-    permissions: [ProjectPermission.PROJECT_MANAGE_USERS, ProjectPermission.PROJECT_READ_USERS],
+    permissions: [ProjectPermission.PROJECT_MANAGE_USERS, ProjectPermission.PROJECT_READ_USERS, ProjectPermission.PROJECT_READ_EVENTS],
   }, di);
 
   return { projectId };
@@ -165,45 +165,4 @@ export const updateUserProjectPermissions = async (
     permissions,
     actorUserId,
   }, di);
-};
-
-export const getProjectEvents = async (
-  { projectId, limit, cursor, actorUserId }: { projectId: UUID; limit?: number; cursor?: UUID; actorUserId: UUID },
-  di: { db: SQL }
-): Promise<{
-  events: {
-    id: UUID;
-    eventType: ProjectEventType;
-    actorEmail: string;
-    metadata: Record<string, unknown> | null;
-    createdAt: string;
-  }[];
-  total: number;
-}> => {
-  const { db } = di;
-  const hasAccess = await queries.checkUserHasProjectPermission(db, {
-    project_id: projectId,
-    user_id: actorUserId,
-    permission: ProjectPermission.PROJECT_READ_USERS,
-  });
-
-  if (!hasAccess) {
-    throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
-  }
-
-  const [events, total] = await Promise.all([
-    queries.getProjectEvents(db, { project_id: projectId, limit, cursor }),
-    queries.getProjectEventCount(db, { project_id: projectId }),
-  ]);
-
-  return {
-    events: events.map((e) => ({
-      id: e.id,
-      eventType: e.event_type,
-      actorEmail: e.actor_email,
-      metadata: e.metadata,
-      createdAt: e.created_at,
-    })),
-    total,
-  };
 };

@@ -16,6 +16,9 @@ If you've completed a task, add a [x] to the task in the TODO.mdc file.
   - projects table, project_user_permissions table
   - queries, service, RPC endpoints
   - UI for creating projects, managing users and permissions
-- Add ApiKeys
-- Add Events
+- [x] Add ingress and unified events
+  - ingress endpoint at `/ingress/:projectId/:restOfPath`
+  - UI showing webhooks and activity log
+- [x] Add Events
+- [ ] Add ApiKeys and apiRpc
 - Add Okta auth

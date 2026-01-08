@@ -5,8 +5,9 @@ import { getTestDb, resetTestDb } from "@/server/db/test-setup";
 import { ErrorCode } from "@/lib/errors";
 import * as queries from "@/server/db/queries";
 import { ProjectPermission } from "@/server/db/queries/project";
-import { ProjectEventType } from "@/server/db/queries/project-event";
+import { EventType } from "@/server/db/queries/event";
 import * as projectService from "./project";
+import * as eventsService from "../events/events";
 
 describe("project service", () => {
   let db: SQL;
@@ -63,11 +64,11 @@ describe("project service", () => {
         { db }
       );
 
-      const events = await queries.getProjectEvents(db, { project_id: result.projectId });
-      const createEvent = events.find((e) => e.event_type === ProjectEventType.PROJECT_CREATED);
+      const events = await queries.getProjectActivityEvents(db, { project_id: result.projectId });
+      const createEvent = events.find((e) => e.type === EventType.PROJECT_CREATED);
 
       expect(createEvent).toBeDefined();
-      expect(createEvent?.metadata).toEqual({ name: "Event Test Project" });
+      expect(createEvent?.data.name).toEqual("Event Test Project");
     });
 
     test("grants creator full permissions", async () => {
@@ -91,10 +92,10 @@ describe("project service", () => {
         { db }
       );
 
-      const events = await queries.getProjectEvents(db, { project_id: result.projectId });
-      const grantEvents = events.filter((e) => e.event_type === ProjectEventType.PERMISSION_GRANTED);
+      const events = await queries.getProjectActivityEvents(db, { project_id: result.projectId });
+      const grantEvents = events.filter((e) => e.type === EventType.PROJECT_USER_PERMISSION_GRANTED);
 
-      expect(grantEvents.length).toBe(2);
+      expect(grantEvents.length).toBe(3);
     });
 
     test("throws AUTHENTICATION_ERROR when actor user does not exist", async () => {
@@ -309,7 +310,7 @@ describe("project service", () => {
         {
           projectId: testProjectId,
           userIdToUpdate: targetUserId,
-          permissions: [ProjectPermission.PROJECT_MANAGE_USERS, ProjectPermission.PROJECT_READ_USERS],
+          permissions: [ProjectPermission.PROJECT_MANAGE_USERS, ProjectPermission.PROJECT_READ_USERS, ProjectPermission.PROJECT_READ_EVENTS],
           actorUserId: ownerUserId,
         },
         { db }
@@ -467,7 +468,7 @@ describe("project service", () => {
     });
   });
 
-  describe("getProjectEvents", () => {
+  describe("getEvents (via eventsService)", () => {
     let testProjectId: UUID;
 
     beforeAll(async () => {
@@ -478,20 +479,23 @@ describe("project service", () => {
       testProjectId = result.projectId;
     });
 
-    test("returns events for user with read permission", async () => {
-      const result = await projectService.getProjectEvents(
-        { projectId: testProjectId, actorUserId: ownerUserId },
+    test("returns project activity events", async () => {
+      const result = await eventsService.getEvents(
+        { projectId: testProjectId, type: EventType.PROJECT_ACTIVITY },
         { db }
       );
 
       expect(result.events.length).toBeGreaterThan(0);
       expect(result.total).toBeGreaterThan(0);
-      expect(result.events.some((e) => e.eventType === ProjectEventType.PROJECT_CREATED)).toBe(true);
+      const projectCreatedEvent = result.events.find(
+        (e) => e.type === EventType.PROJECT_CREATED
+      );
+      expect(projectCreatedEvent).toBeDefined();
     });
 
     test("supports cursor pagination", async () => {
-      const resultPage1 = await projectService.getProjectEvents(
-        { projectId: testProjectId, limit: 1, actorUserId: ownerUserId },
+      const resultPage1 = await eventsService.getEvents(
+        { projectId: testProjectId, type: EventType.PROJECT_ACTIVITY, limit: 1 },
         { db }
       );
 
@@ -500,20 +504,13 @@ describe("project service", () => {
 
       // Use the first event's id as cursor to get the next page
       const cursor = resultPage1.events[0]?.id;
-      const resultPage2 = await projectService.getProjectEvents(
-        { projectId: testProjectId, limit: 1, cursor, actorUserId: ownerUserId },
+      const resultPage2 = await eventsService.getEvents(
+        { projectId: testProjectId, type: EventType.PROJECT_ACTIVITY, limit: 1, cursor },
         { db }
       );
 
       expect(resultPage2.events.length).toBe(1);
       expect(resultPage2.events[0]?.id).not.toBe(resultPage1.events[0]?.id);
     });
-
-    test("throws PROJECT_NOT_FOUND for user without read permission", async () => {
-      expect(
-        projectService.getProjectEvents({ projectId: testProjectId, actorUserId: nonMemberUserId }, { db })
-      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
-    });
   });
 });
-

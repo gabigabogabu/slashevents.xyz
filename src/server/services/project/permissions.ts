@@ -5,7 +5,7 @@ import { ErrorCode } from "@/lib/errors";
 import { RpcError } from "@/server/rpc-handler";
 import * as queries from "@/server/db/queries";
 import { ProjectPermission } from "@/server/db/queries/project";
-import { ProjectEventType } from "@/server/db/queries/project-event";
+import { EventType } from "@/server/db/queries/event";
 
 /**
  * Check if the actor has permission to manage users in the project.
@@ -58,10 +58,10 @@ const grantPermissionUnchecked = async (
       targetEmail = targetUser?.email;
     }
 
-    await queries.insertProjectEvent(db, {
+    await queries.insertProjectActivityEvent(db, {
       project_id: params.projectId,
       actor_user_id: params.actorUserId,
-      event_type: ProjectEventType.PERMISSION_GRANTED,
+      event_type: EventType.PROJECT_USER_PERMISSION_GRANTED,
       metadata: {
         targetUserId: params.userId,
         targetEmail,
@@ -138,10 +138,10 @@ const revokePermissionUnchecked = async (
       targetEmail = targetUser?.email;
     }
 
-    await queries.insertProjectEvent(db, {
+    await queries.insertProjectActivityEvent(db, {
       project_id: params.projectId,
       actor_user_id: params.actorUserId,
-      event_type: ProjectEventType.PERMISSION_REVOKED,
+      event_type: EventType.PROJECT_USER_PERMISSION_REVOKED,
       metadata: {
         targetUserId: params.userId,
         targetEmail,
@@ -341,10 +341,10 @@ export const addUserToProject = async (
 
   // Log USER_ADDED event for new users
   if (isNewUser && granted.length > 0) {
-    await queries.insertProjectEvent(db, {
+    await queries.insertProjectActivityEvent(db, {
       project_id: params.projectId,
       actor_user_id: params.actorUserId,
-      event_type: ProjectEventType.USER_ADDED,
+      event_type: EventType.PROJECT_USER_ADDED,
       metadata: {
         targetUserId: params.userId,
         targetEmail,
@@ -397,10 +397,10 @@ export const removeUserFromProject = async (
     return { removed: false, removedPermissions: [] };
 
   // Log USER_REMOVED event
-  await queries.insertProjectEvent(db, {
+  await queries.insertProjectActivityEvent(db, {
     project_id: params.projectId,
     actor_user_id: params.actorUserId,
-    event_type: ProjectEventType.USER_REMOVED,
+      event_type: EventType.PROJECT_USER_REMOVED,
     metadata: {
       targetUserId: params.userId,
       targetEmail,

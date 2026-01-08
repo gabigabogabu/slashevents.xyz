@@ -5,7 +5,7 @@ import { getTestDb, resetTestDb } from "@/server/db/test-setup";
 import { ErrorCode } from "@/lib/errors";
 import * as queries from "@/server/db/queries";
 import { ProjectPermission } from "@/server/db/queries/project";
-import { ProjectEventType } from "@/server/db/queries/project-event";
+import { EventType } from "@/server/db/queries/event";
 import * as permissionsService from "./permissions";
 
 describe("permissions service", () => {
@@ -80,15 +80,15 @@ describe("permissions service", () => {
     });
 
     test("logs PERMISSION_GRANTED event with metadata", async () => {
-      const events = await queries.getProjectEvents(db, { project_id: projectId });
+      const events = await queries.getProjectActivityEvents(db, { project_id: projectId });
       const grantEvent = events.find(
         (e) =>
-          e.event_type === ProjectEventType.PERMISSION_GRANTED &&
-          e.metadata?.targetUserId === regularUserId &&
-          e.metadata?.permission === ProjectPermission.PROJECT_READ_USERS
+          e.type === EventType.PROJECT_USER_PERMISSION_GRANTED &&
+          e.data.targetUserId === regularUserId &&
+          e.data.permission === ProjectPermission.PROJECT_READ_USERS
       );
       expect(grantEvent).toBeDefined();
-      expect(grantEvent?.metadata?.targetEmail).toBeDefined();
+      expect(grantEvent?.data.targetEmail).toBeDefined();
     });
 
     test("returns false for duplicate permission", async () => {
@@ -140,15 +140,15 @@ describe("permissions service", () => {
     });
 
     test("logs PERMISSION_REVOKED event with metadata", async () => {
-      const events = await queries.getProjectEvents(db, { project_id: projectId });
+      const events = await queries.getProjectActivityEvents(db, { project_id: projectId });
       const revokeEvent = events.find(
         (e) =>
-          e.event_type === ProjectEventType.PERMISSION_REVOKED &&
-          e.metadata?.targetUserId === regularUserId &&
-          e.metadata?.permission === ProjectPermission.PROJECT_MANAGE_USERS
+          e.type === EventType.PROJECT_USER_PERMISSION_REVOKED &&
+          e.data.targetUserId === regularUserId &&
+          e.data.permission === ProjectPermission.PROJECT_MANAGE_USERS
       );
       expect(revokeEvent).toBeDefined();
-      expect(revokeEvent?.metadata?.targetEmail).toBeDefined();
+      expect(revokeEvent?.data.targetEmail).toBeDefined();
     });
 
     test("returns false for non-existent permission", async () => {
@@ -197,17 +197,18 @@ describe("permissions service", () => {
       const granted = await permissionsService.grantInitialPermissions({
         projectId: newProjectId,
         creatorUserId: noPermissionUserId,
-        permissions: [ProjectPermission.PROJECT_MANAGE_USERS, ProjectPermission.PROJECT_READ_USERS],
+        permissions: [ProjectPermission.PROJECT_MANAGE_USERS, ProjectPermission.PROJECT_READ_USERS, ProjectPermission.PROJECT_READ_EVENTS],
       }, { db });
 
       expect(granted).toContain(ProjectPermission.PROJECT_MANAGE_USERS);
       expect(granted).toContain(ProjectPermission.PROJECT_READ_USERS);
+      expect(granted).toContain(ProjectPermission.PROJECT_READ_EVENTS);
 
       const permissions = await queries.getProjectUserPermissions(db, {
         project_id: newProjectId,
         user_id: noPermissionUserId,
       });
-      expect(permissions.length).toBe(2);
+      expect(permissions.length).toBe(3);
     });
   });
 
@@ -309,19 +310,19 @@ describe("permissions service", () => {
       expect(result.granted).toContain(ProjectPermission.PROJECT_READ_USERS);
 
       // Check USER_ADDED event was logged with metadata
-      const events = await queries.getProjectEvents(db, { project_id: addUserTestProjectId });
+      const events = await queries.getProjectActivityEvents(db, { project_id: addUserTestProjectId });
       const addedEvent = events.find(
-        (e) => e.event_type === ProjectEventType.USER_ADDED && e.metadata?.targetUserId === newUserId
+        (e) => e.type === EventType.PROJECT_USER_ADDED && e.data.targetUserId === newUserId
       );
       expect(addedEvent).toBeDefined();
-      expect(addedEvent?.metadata?.targetEmail).toBeDefined();
-      expect(addedEvent?.metadata?.permissions).toContain(ProjectPermission.PROJECT_READ_USERS);
+      expect(addedEvent?.data.targetEmail).toBeDefined();
+      expect(addedEvent?.data.permissions).toContain(ProjectPermission.PROJECT_READ_USERS);
     });
 
     test("does not log USER_ADDED event for existing user", async () => {
-      const eventsBefore = await queries.getProjectEvents(db, { project_id: addUserTestProjectId });
+      const eventsBefore = await queries.getProjectActivityEvents(db, { project_id: addUserTestProjectId });
       const userAddedCountBefore = eventsBefore.filter(
-        (e) => e.event_type === ProjectEventType.USER_ADDED
+        (e) => e.type === EventType.PROJECT_USER_ADDED
       ).length;
 
       // Add another permission to existing user
@@ -334,9 +335,9 @@ describe("permissions service", () => {
 
       expect(result.isNewUser).toBe(false);
 
-      const eventsAfter = await queries.getProjectEvents(db, { project_id: addUserTestProjectId });
+      const eventsAfter = await queries.getProjectActivityEvents(db, { project_id: addUserTestProjectId });
       const userAddedCountAfter = eventsAfter.filter(
-        (e) => e.event_type === ProjectEventType.USER_ADDED
+        (e) => e.type === EventType.PROJECT_USER_ADDED
       ).length;
 
       expect(userAddedCountAfter).toBe(userAddedCountBefore);
@@ -406,13 +407,13 @@ describe("permissions service", () => {
     });
 
     test("logs USER_REMOVED event with metadata", async () => {
-      const events = await queries.getProjectEvents(db, { project_id: removeUserTestProjectId });
+      const events = await queries.getProjectActivityEvents(db, { project_id: removeUserTestProjectId });
       const removedEvent = events.find(
-        (e) => e.event_type === ProjectEventType.USER_REMOVED && e.metadata?.targetUserId === userToRemoveId
+        (e) => e.type === EventType.PROJECT_USER_REMOVED && e.data.targetUserId === userToRemoveId
       );
       expect(removedEvent).toBeDefined();
-      expect(removedEvent?.metadata?.targetEmail).toBeDefined();
-      expect(removedEvent?.metadata?.removedPermissions).toBeDefined();
+      expect(removedEvent?.data.targetEmail).toBeDefined();
+      expect(removedEvent?.data.removedPermissions).toBeDefined();
     });
 
     test("returns removed: false for user not in project", async () => {

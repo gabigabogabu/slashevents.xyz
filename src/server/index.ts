@@ -4,12 +4,16 @@ import { z } from "zod";
 
 import { env } from "./env";
 import { getDb, isDbUp } from "./db/init";
-import { defRpc, RpcHandler } from "./rpc-handler";
+import { defRpc, RpcHandler, RpcError } from "./rpc-handler";
 import type { InferRpc } from "./rpc-handler";
+import { ErrorCode } from "@/lib/errors";
 import { MigrationStatus, runMigrations } from "./db/run-migrations";
 import { userSignup, userLogin, checkUserJwt } from "./services/user/auth";
 import * as projectService from "./services/project/project";
-import { ProjectPermission } from "./db/queries/project";
+import * as eventsService from "./services/events/events";
+import { ProjectPermission, checkUserHasProjectPermission } from "./db/queries/project";
+import { EventType } from "./db/queries/event";
+export { EventType };
 
 enum HttpStatus {
   OK = 200,
@@ -160,17 +164,26 @@ const _appRpcHandler = new RpcHandler({
       }, { db })
     },
   }),
-  getProjectEvents: defRpc({
+  getEvents: defRpc({
     inputValidation: jwtSchema.extend({
       projectId: z.uuid(),
+      type: z.nativeEnum(EventType).optional(),
       limit: z.number().int().min(1).max(100).optional(),
       cursor: z.uuid().optional(),
     }),
-    handle: ({ params }) => {
+    handle: async ({ params }) => {
       const authedParams = handleJwt(params);
-      return projectService.getProjectEvents({ 
-        ...authedParams, 
+      const hasPermission = await checkUserHasProjectPermission(db, {
+        project_id: authedParams.projectId as UUID,
+        user_id: authedParams.actorUserId,
+        permission: ProjectPermission.PROJECT_READ_EVENTS,
+      });
+      if (!hasPermission) {
+        throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
+      }
+      return eventsService.getEvents({ 
         projectId: authedParams.projectId as UUID,
+        type: authedParams.type,
         limit: authedParams.limit as number | undefined,
         cursor: authedParams.cursor as UUID | undefined
       }, { db })
@@ -191,4 +204,56 @@ export type ApiRpc = typeof apiRpc._rpcType;
 
 export const closeServer = async () => {
   await closeDb();
+};
+
+// Ingress handler for webhook endpoints
+export const handleWebhook = async (req: Request, server: Bun.Server<unknown>, projectId: string, restOfPath: string): Promise<Response> => {
+  try {
+    const headers = req.headers.toJSON();
+
+    let body: string | null = null;
+    try {
+      body = await req.text();
+    } catch {
+      body = null;
+    }
+
+    // Extract query string
+    const url = new URL(req.url);
+    const queryString = url.search ? url.search.slice(1) : null;
+
+    // Extract source IP (from headers or connection)
+    const source = server.requestIP(req)
+    const sourceIp = source?.address ?? null;
+    const sourcePort = source?.port ?? null;
+
+    const result = await eventsService.handleIngress({
+      projectId: projectId as UUID,
+      path: "/" + restOfPath,
+      method: req.method,
+      headers,
+      body,
+      queryString,
+      sourceIp,
+      sourcePort,
+    }, { db });
+
+    if ("error" in result) {
+      return new Response(JSON.stringify({ error: result.error }), { 
+        status: result.status,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(JSON.stringify({ eventId: result.eventId }), { 
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (error) {
+    console.error("Error handling ingress request:", error);
+    return new Response(JSON.stringify({ error: "INTERNAL_ERROR" }), { 
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
 };

@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/errors";
-import { Plus, Users, Trash2, FolderOpen, Loader2, ArrowLeft, UserPlus, Shield, Eye, History, UserMinus, KeyRound } from "lucide-react";
+import { EventType } from "@/index";
+import { Plus, Users, Trash2, FolderOpen, Loader2, ArrowLeft, UserPlus, Shield, Eye, History, UserMinus, KeyRound, Webhook, ChevronRight, Globe, Clock, FileJson } from "lucide-react";
 
 type Project = {
   id: string;
@@ -14,26 +15,52 @@ type Project = {
   createdAt: string;
 };
 
+type ProjectPermission = "project_manage_users" | "project_read_users" | "project_read_events";
+
 type ProjectUser = {
   userId: string;
   email: string;
-  permissions: ("project_manage_users" | "project_read_users")[];
+  permissions: ProjectPermission[];
 };
 
-type ProjectEvent = {
+type ProjectActivityEventType = 
+  | "project.created"
+  | "project.user.added"
+  | "project.user.removed"
+  | "project.user.permission.granted"
+  | "project.user.permission.revoked";
+
+type ProjectActivityEvent = {
   id: string;
-  eventType: "project_created" | "user_added" | "user_removed" | "permission_granted" | "permission_revoked";
+  type: ProjectActivityEventType;
   actorEmail: string;
-  metadata: {
+  data: {
+    actorUserId: string;
     targetUserId?: string;
-    permission?: "project_manage_users" | "project_read_users";
-    permissions?: ("project_manage_users" | "project_read_users")[];
-    removedPermissions?: ("project_manage_users" | "project_read_users")[];
+    targetEmail?: string;
+    permission?: ProjectPermission;
+    permissions?: ProjectPermission[];
+    removedPermissions?: ProjectPermission[];
     name?: string;
     [key: string]: unknown;
-  } | null;
-  createdAt: string;
+  };
+  receivedAt: string;
 };
+
+type WebhookEvent = {
+  id: string;
+  type: "webhook.received";
+  httpMethod: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+  path: string;
+  headers: Record<string, string>;
+  body: string | null;
+  queryString: string | null;
+  sourceIp: string | null;
+  sourcePort: number | null;
+  receivedAt: string;
+};
+
+type Event = ProjectActivityEvent | WebhookEvent;
 
 export function ProjectsListPage() {
   const { authenticatedRpc } = useAuth();
@@ -309,6 +336,8 @@ function ProjectDetail({ project }: { project: Project }) {
         </Card>
       )}
 
+      <WebhookEvents projectId={project.id} />
+
       <ActivityLog projectId={project.id} />
     </div>
   );
@@ -317,7 +346,7 @@ function ProjectDetail({ project }: { project: Project }) {
 function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () => void }) {
   const { authenticatedRpc } = useAuth();
   const [email, setEmail] = React.useState("");
-  const [permissions, setPermissions] = React.useState<("project_manage_users" | "project_read_users")[]>(["project_read_users"]);
+  const [permissions, setPermissions] = React.useState<ProjectPermission[]>(["project_read_users", "project_read_events"]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -335,7 +364,7 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
         permissions,
       });
       setEmail("");
-      setPermissions(["project_read_users"]);
+      setPermissions(["project_read_users", "project_read_events"]);
       onAdded();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -344,7 +373,7 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
     }
   };
 
-  const togglePermission = (perm: "project_manage_users" | "project_read_users") => {
+  const togglePermission = (perm: ProjectPermission) => {
     setPermissions((prev) =>
       prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
     );
@@ -377,7 +406,7 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <Label className="text-sm font-medium">Permissions:</Label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -388,6 +417,16 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
               />
               <Eye className="size-4" />
               <span className="text-sm">Read Users</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={permissions.includes("project_read_events")}
+                onChange={() => togglePermission("project_read_events")}
+                className="rounded border-gray-300"
+              />
+              <History className="size-4" />
+              <span className="text-sm">Read Events</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -445,7 +484,7 @@ function UserRow({
     }
   };
 
-  const togglePermission = async (perm: "project_manage_users" | "project_read_users") => {
+  const togglePermission = async (perm: ProjectPermission) => {
     const newPermissions = user.permissions.includes(perm)
       ? user.permissions.filter((p) => p !== perm)
       : [...user.permissions, perm];
@@ -476,7 +515,7 @@ function UserRow({
     <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
       <div className="flex-1">
         <div className="font-medium">{user.email}</div>
-        <div className="flex items-center gap-3 mt-1">
+        <div className="flex items-center gap-3 mt-1 flex-wrap">
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
@@ -486,7 +525,18 @@ function UserRow({
               className="rounded border-gray-300"
             />
             <Eye className="size-3" />
-            <span>Read</span>
+            <span>Read Users</span>
+          </label>
+          <label className="flex items-center gap-1 cursor-pointer text-xs">
+            <input
+              type="checkbox"
+              checked={user.permissions.includes("project_read_events")}
+              onChange={() => togglePermission("project_read_events")}
+              disabled={loading}
+              className="rounded border-gray-300"
+            />
+            <History className="size-3" />
+            <span>Read Events</span>
           </label>
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
@@ -517,9 +567,212 @@ function UserRow({
   );
 }
 
+function WebhookEvents({ projectId }: { projectId: string }) {
+  const { authenticatedRpc } = useAuth();
+  const [events, setEvents] = React.useState<WebhookEvent[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [total, setTotal] = React.useState(0);
+  const [showAll, setShowAll] = React.useState(false);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [cursor, setCursor] = React.useState<string | null>(null);
+  const [hasMore, setHasMore] = React.useState(false);
+
+  const fetchEvents = React.useCallback(async (append = false, cursorId?: string) => {
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+      const limit = showAll || append ? 20 : 3;
+      const result = await authenticatedRpc.getEvents({ 
+        projectId, 
+        type: EventType.WEBHOOK_RECEIVED,
+        limit,
+        cursor: cursorId,
+      });
+      const webhookEvents = result.events.filter((e) => e.type === "webhook.received") as WebhookEvent[];
+      if (append) {
+        setEvents(prev => [...prev, ...webhookEvents]);
+      } else {
+        setEvents(webhookEvents);
+      }
+      setTotal(result.total);
+      setHasMore(webhookEvents.length === limit && (append ? events.length + webhookEvents.length : webhookEvents.length) < result.total);
+      if (webhookEvents.length > 0) {
+        setCursor(webhookEvents[webhookEvents.length - 1]!.id);
+      }
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [authenticatedRpc, projectId, showAll, events.length]);
+
+  React.useEffect(() => {
+    fetchEvents();
+  }, [showAll]);
+
+  const handleLoadMore = () => {
+    if (cursor && hasMore) {
+      fetchEvents(true, cursor);
+    }
+  };
+
+  const getMethodColor = (method: WebhookEvent["httpMethod"]) => {
+    switch (method) {
+      case "GET":
+        return "text-green-600 bg-green-100";
+      case "POST":
+        return "text-blue-600 bg-blue-100";
+      case "PUT":
+        return "text-yellow-600 bg-yellow-100";
+      case "PATCH":
+        return "text-orange-600 bg-orange-100";
+      case "DELETE":
+        return "text-red-600 bg-red-100";
+      default:
+        return "text-gray-600 bg-gray-100";
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const displayEvents = events;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Webhook className="size-5" />
+              Received Webhooks
+            </CardTitle>
+            <CardDescription>
+              Incoming webhook events for this project.
+            </CardDescription>
+          </div>
+          {total > 0 && (
+            <div className="text-sm text-muted-foreground">
+              {total} total
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center p-4">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : error ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : events.length === 0 ? (
+          <div className="text-center py-8">
+            <Webhook className="size-12 mx-auto text-muted-foreground/50 mb-4" />
+            <p className="text-sm text-muted-foreground mb-2">No webhooks received yet.</p>
+            <p className="text-xs text-muted-foreground">
+              Send webhooks to: <code className="bg-muted px-2 py-1 rounded">/ingress/{projectId}/your-path</code>
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {displayEvents.map((event) => (
+              <div key={event.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                <div className="flex-shrink-0">
+                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-mono font-medium ${getMethodColor(event.httpMethod)}`}>
+                    {event.httpMethod}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm font-mono truncate">{event.path}</code>
+                    {event.queryString && (
+                      <span className="text-xs text-muted-foreground truncate">?{event.queryString}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Clock className="size-3" />
+                      {formatDate(event.receivedAt)}
+                    </span>
+                    {event.sourceIp && (
+                      <span className="flex items-center gap-1">
+                        <Globe className="size-3" />
+                        {event.sourceIp}
+                      </span>
+                    )}
+                    {event.body && (
+                      <span className="flex items-center gap-1">
+                        <FileJson className="size-3" />
+                        {event.body.length} bytes
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {!showAll && total > 3 && (
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => setShowAll(true)}
+              >
+                View all webhooks
+                <ChevronRight className="size-4 ml-2" />
+              </Button>
+            )}
+            
+            {showAll && hasMore && (
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    Load more
+                    <ChevronRight className="size-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {showAll && !hasMore && events.length > 3 && (
+              <p className="text-xs text-muted-foreground text-center pt-2">
+                Showing all {events.length} events
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ActivityLog({ projectId }: { projectId: string }) {
   const { authenticatedRpc } = useAuth();
-  const [events, setEvents] = React.useState<ProjectEvent[]>([]);
+  const [events, setEvents] = React.useState<ProjectActivityEvent[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [total, setTotal] = React.useState(0);
@@ -528,8 +781,9 @@ function ActivityLog({ projectId }: { projectId: string }) {
     try {
       setLoading(true);
       setError(null);
-      const result = await authenticatedRpc.getProjectEvents({ projectId, limit: 20 });
-      setEvents(result.events);
+      const result = await authenticatedRpc.getEvents({ projectId, limit: 20 });
+      const activityEvents = result.events.filter((e) => e.type.startsWith("project.")) as ProjectActivityEvent[];
+      setEvents(activityEvents);
       setTotal(result.total);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -542,38 +796,39 @@ function ActivityLog({ projectId }: { projectId: string }) {
     fetchEvents();
   }, [fetchEvents]);
 
-  const getEventIcon = (eventType: ProjectEvent["eventType"]) => {
+  const getEventIcon = (eventType: ProjectActivityEvent["type"]) => {
     switch (eventType) {
-      case "project_created":
+      case "project.created":
         return <FolderOpen className="size-4 text-green-500" />;
-      case "user_added":
+      case "project.user.added":
         return <UserPlus className="size-4 text-blue-500" />;
-      case "user_removed":
+      case "project.user.removed":
         return <UserMinus className="size-4 text-red-500" />;
-      case "permission_granted":
+      case "project.user.permission.granted":
         return <KeyRound className="size-4 text-green-500" />;
-      case "permission_revoked":
+      case "project.user.permission.revoked":
         return <KeyRound className="size-4 text-orange-500" />;
       default:
         return <History className="size-4 text-muted-foreground" />;
     }
   };
 
-  const getEventDescription = (event: ProjectEvent) => {
-    const targetEmail = event.metadata?.targetEmail as string | undefined;
-    const permission = event.metadata?.permission as "project_manage_users" | "project_read_users" | undefined;
-    const permissionLabel = permission === "project_manage_users" ? "Manage Users" : "Read Users";
+  const getEventDescription = (event: ProjectActivityEvent) => {
+    const targetEmail = event.data.targetEmail;
+    const permission = event.data.permission;
+    const permissionLabel = permission === "project_manage_users" ? "Manage Users" : 
+                            permission === "project_read_events" ? "Read Events" : "Read Users";
     
-    switch (event.eventType) {
-      case "project_created":
+    switch (event.type) {
+      case "project.created":
         return <><span className="font-medium">{event.actorEmail}</span> created the project</>;
-      case "user_added":
+      case "project.user.added":
         return <><span className="font-medium">{event.actorEmail}</span> added <span className="font-medium">{targetEmail ?? "a user"}</span> to the project</>;
-      case "user_removed":
+      case "project.user.removed":
         return <><span className="font-medium">{event.actorEmail}</span> removed <span className="font-medium">{targetEmail ?? "a user"}</span> from the project</>;
-      case "permission_granted":
+      case "project.user.permission.granted":
         return <><span className="font-medium">{event.actorEmail}</span> granted <span className="font-medium">{permissionLabel}</span> to <span className="font-medium">{targetEmail ?? "a user"}</span></>;
-      case "permission_revoked":
+      case "project.user.permission.revoked":
         return <><span className="font-medium">{event.actorEmail}</span> revoked <span className="font-medium">{permissionLabel}</span> from <span className="font-medium">{targetEmail ?? "a user"}</span></>;
       default:
         return <span>Unknown event</span>;
@@ -619,11 +874,11 @@ function ActivityLog({ projectId }: { projectId: string }) {
           <div className="space-y-3">
             {events.map((event) => (
               <div key={event.id} className="flex items-start gap-3 text-sm">
-                <div className="mt-0.5">{getEventIcon(event.eventType)}</div>
+                <div className="mt-0.5">{getEventIcon(event.type)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-foreground">{getEventDescription(event)}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {formatDate(event.createdAt)}
+                    {formatDate(event.receivedAt)}
                   </div>
                 </div>
               </div>

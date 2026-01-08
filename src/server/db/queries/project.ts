@@ -4,6 +4,7 @@ import type { UUID } from "crypto";
 export enum ProjectPermission {
   PROJECT_MANAGE_USERS = "project_manage_users",
   PROJECT_READ_USERS = "project_read_users",
+  PROJECT_READ_EVENTS = "project_read_events",
 }
 
 type ProjectDbRow = {

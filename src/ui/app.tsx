@@ -13,7 +13,7 @@ const appNav = [
 // Extract project ID from pathname like /app/projects/:uuid
 function extractProjectId(pathname: string): string | null {
   const match = pathname.match(/^\/app\/projects\/([a-f0-9-]{36})$/i);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 function AppContent() {
