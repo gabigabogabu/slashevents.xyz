@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/errors";
-import { EventType } from "@/index";
+import { EventType } from "@/lib/event-types";
 import { Plus, Users, Trash2, FolderOpen, Loader2, ArrowLeft, UserPlus, Shield, Eye, History, UserMinus, KeyRound, Webhook, ChevronRight, Globe, Clock, FileJson } from "lucide-react";
 
 type Project = {

@@ -7,6 +7,7 @@ alwaysApply: true
 If a new task is being asked for, add it to the TODO.mdc file.
 If you're starting to work on a task, add a [ ] to the task in the TODO.mdc file.
 If you've completed a task, add a [x] to the task in the TODO.mdc file.
+After completing a task, check that the tests and the build are green.
 
 - [x] Set up UI skeleton (landing, app UI, admin UI)
 - [x] Move app data out of the public schema (use a dedicated schema)

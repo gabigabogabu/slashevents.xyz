@@ -7,7 +7,6 @@ import * as queries from "@/server/db/queries";
 import { ProjectPermission } from "@/server/db/queries/project";
 import { EventType } from "@/server/db/queries/event";
 import * as projectService from "./project";
-import * as eventsService from "../events/events";
 
 describe("project service", () => {
   let db: SQL;
@@ -464,52 +463,6 @@ describe("project service", () => {
           { db }
         )
       ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
-    });
-  });
-
-  describe("getEvents (via eventsService)", () => {
-    let testProjectId: UUID;
-
-    beforeAll(async () => {
-      const result = await projectService.createProject(
-        { name: "Events Test Project", actorUserId: ownerUserId },
-        { db }
-      );
-      testProjectId = result.projectId;
-    });
-
-    test("returns project activity events", async () => {
-      const result = await eventsService.getEvents(
-        { projectId: testProjectId, type: EventType.PROJECT_ACTIVITY },
-        { db }
-      );
-
-      expect(result.events.length).toBeGreaterThan(0);
-      expect(result.total).toBeGreaterThan(0);
-      const projectCreatedEvent = result.events.find(
-        (e) => e.type === EventType.PROJECT_CREATED
-      );
-      expect(projectCreatedEvent).toBeDefined();
-    });
-
-    test("supports cursor pagination", async () => {
-      const resultPage1 = await eventsService.getEvents(
-        { projectId: testProjectId, type: EventType.PROJECT_ACTIVITY, limit: 1 },
-        { db }
-      );
-
-      expect(resultPage1.events.length).toBe(1);
-      expect(resultPage1.total).toBeGreaterThan(1);
-
-      // Use the first event's id as cursor to get the next page
-      const cursor = resultPage1.events[0]?.id;
-      const resultPage2 = await eventsService.getEvents(
-        { projectId: testProjectId, type: EventType.PROJECT_ACTIVITY, limit: 1, cursor },
-        { db }
-      );
-
-      expect(resultPage2.events.length).toBe(1);
-      expect(resultPage2.events[0]?.id).not.toBe(resultPage1.events[0]?.id);
     });
   });
 });

@@ -1,5 +1,5 @@
 // Auto-generated clients with inferred types from server
-import type { AppRpc, AdminRpc, ApiRpc } from "../index";
+import type { AppRpc, AdminRpc, ApiRpc } from "../server";
 import { ErrorCode } from "./errors";
 
 type IsUndefined<T> = [T] extends [undefined] ? true : false;

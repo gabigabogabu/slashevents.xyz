@@ -2,7 +2,6 @@ import { serve } from "bun";
 import index from "./index.html";
 import * as s from "./server";
 export type { AppRpc, AdminRpc, ApiRpc } from "./server";
-export { EventType } from "./server";
 
 const server = serve({
   routes: {

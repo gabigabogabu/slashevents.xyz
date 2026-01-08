@@ -12,7 +12,7 @@ import { userSignup, userLogin, checkUserJwt } from "./services/user/auth";
 import * as projectService from "./services/project/project";
 import * as eventsService from "./services/events/events";
 import { ProjectPermission, checkUserHasProjectPermission } from "./db/queries/project";
-import { EventType } from "./db/queries/event";
+import { EventType } from "@/lib/event-types";
 export { EventType };
 
 enum HttpStatus {
