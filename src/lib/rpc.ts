@@ -84,7 +84,6 @@ const fetchRpc = (endpoint: string) => async (body: { id: string; method: string
 
 export const appRpc = createRpcClient<AppRpc>(fetchRpc("/app-rpc"));
 export const adminRpc = createRpcClient<AdminRpc>(fetchRpc("/admin-rpc"));
-export const apiRpc = createRpcClient<ApiRpc>(fetchRpc("/api-rpc"));
 
 // Create an authenticated RPC client that automatically injects JWT token
 // If an AUTHENTICATION_ERROR is returned, the onAuthError callback is called (typically to logout)

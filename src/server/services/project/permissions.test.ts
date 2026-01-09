@@ -4,8 +4,8 @@ import type { UUID } from "crypto";
 import { getTestDb, resetTestDb } from "@/server/db/test-setup";
 import { ErrorCode } from "@/lib/errors";
 import * as queries from "@/server/db/queries";
-import { ProjectPermission } from "@/server/db/queries/project";
-import { EventType } from "@/server/db/queries/event";
+import { ProjectPermission } from "@/lib/project-permissions";
+import { EventType } from "@/lib/event-types";
 import * as permissionsService from "./permissions";
 
 describe("permissions service", () => {

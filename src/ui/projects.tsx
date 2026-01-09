@@ -1,25 +1,20 @@
-import * as React from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/ui/auth-context";
+import { useRpc, useRpcMutation } from "@/ui/use-rpc";
 import { navigate, Link } from "@/ui/router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getErrorMessage } from "@/lib/errors";
 import { EventType } from "@/lib/event-types";
 import { Copy, EyeOff, Plus, Users, Trash2, FolderOpen, Loader2, ArrowLeft, UserPlus, Shield, Eye, History, UserMinus, KeyRound, Webhook, ChevronRight, Globe, Clock, FileJson } from "lucide-react";
+import { ProjectPermission } from "@/lib/project-permissions";
 
 type Project = {
   id: string;
   name: string;
   createdAt: string;
 };
-
-type ProjectPermission =
-  | "PROJECT_MANAGE_USERS"
-  | "PROJECT_READ_USERS"
-  | "PROJECT_READ_EVENTS"
-  | "PROJECT_READ_API_KEY";
 
 type ProjectUser = {
   userId: string;
@@ -34,26 +29,32 @@ type ProjectActivityEventType =
   | "PROJECT_USER_PERMISSION_GRANTED"
   | "PROJECT_USER_PERMISSION_REVOKED";
 
-type ProjectActivityEvent = {
+type EventDto = {
   id: string;
-  type: ProjectActivityEventType;
-  actorEmail: string;
-  data: {
-    actorUserId: string;
-    targetUserId?: string;
-    targetEmail?: string;
-    permission?: ProjectPermission;
-    permissions?: ProjectPermission[];
-    removedPermissions?: ProjectPermission[];
-    name?: string;
-    [key: string]: unknown;
-  };
+  projectId: string;
+  type: EventType;
+  data: unknown;
   receivedAt: string;
+  actorEmail?: string;
 };
 
-type WebhookEvent = {
-  id: string;
-  type: EventType.WEBHOOK_RECEIVED;
+type ProjectActivityEventData = {
+  actorUserId: string;
+  targetUserId?: string;
+  targetEmail?: string;
+  permission?: ProjectPermission;
+  permissions?: ProjectPermission[];
+  removedPermissions?: ProjectPermission[];
+  name?: string;
+  [key: string]: unknown;
+};
+
+type ProjectActivityEvent = Omit<EventDto, "type" | "data"> & {
+  type: ProjectActivityEventType;
+  data: ProjectActivityEventData;
+};
+
+type WebhookEventData = {
   httpMethod: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
   path: string;
   headers: Record<string, string>;
@@ -61,35 +62,25 @@ type WebhookEvent = {
   queryString: string | null;
   sourceIp: string | null;
   sourcePort: number | null;
-  receivedAt: string;
+};
+
+type WebhookEvent = Omit<EventDto, "type" | "data"> & {
+  type: EventType.WEBHOOK_RECEIVED;
+  data: WebhookEventData;
 };
 
 type Event = ProjectActivityEvent | WebhookEvent;
 
 export function ProjectsListPage() {
   const { authenticatedRpc } = useAuth();
-  const [projects, setProjects] = React.useState<Project[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const { data, isLoading, error, refetch: refetchProjects } = useRpc(
+    () => authenticatedRpc.getProjects() as Promise<{ projects: Project[] }>,
+    { deps: [authenticatedRpc] }
+  );
 
-  const fetchProjects = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await authenticatedRpc.getProjects();
-      setProjects(result.projects);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [authenticatedRpc]);
+  const projects = data?.projects ?? [];
 
-  React.useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
@@ -99,7 +90,7 @@ export function ProjectsListPage() {
 
   return (
     <div className="space-y-6">
-      <CreateProjectForm onCreated={fetchProjects} />
+      <CreateProjectForm onCreated={refetchProjects} />
       
       <Card className={error ? "border-destructive" : undefined}>
         <CardHeader>
@@ -145,27 +136,13 @@ export function ProjectsListPage() {
 
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const { authenticatedRpc } = useAuth();
-  const [project, setProject] = React.useState<Project | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const { data, isLoading, error } = useRpc(
+    () => authenticatedRpc.getProject({ projectId }) as Promise<{ project: Project }>,
+    { deps: [authenticatedRpc, projectId] }
+  );
+  const project = data?.project ?? null;
 
-  React.useEffect(() => {
-    const fetchProject = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await authenticatedRpc.getProject({ projectId });
-        setProject(result.project);
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProject();
-  }, [authenticatedRpc, projectId]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
@@ -196,25 +173,24 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
 function CreateProjectForm({ onCreated }: { onCreated: () => void }) {
   const { authenticatedRpc } = useAuth();
-  const [name, setName] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      await authenticatedRpc.createProject({ name: name.trim() });
-      setName("");
-      onCreated();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
+  const [name, setName] = useState("");
+  const { mutate: createProject, isLoading: loading, error } = useRpcMutation(
+    async (projectName: string) => {
+      await authenticatedRpc.createProject({ name: projectName });
+    },
+    {
+      onSuccess: () => {
+        setName("");
+        onCreated();
+      },
     }
+  );
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    void createProject(trimmed);
   };
 
   return (
@@ -254,57 +230,43 @@ function CreateProjectForm({ onCreated }: { onCreated: () => void }) {
 
 function ProjectDetail({ project }: { project: Project }) {
   const { authenticatedRpc } = useAuth();
-  const [users, setUsers] = React.useState<ProjectUser[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [showApiKey, setShowApiKey] = React.useState(false);
-  const [apiKey, setApiKey] = React.useState<string | null>(null);
-  const [apiKeyLoading, setApiKeyLoading] = React.useState(false);
-  const [apiKeyError, setApiKeyError] = React.useState<string | null>(null);
+  const { data: usersResult, isLoading: loading, error, refetch: refetchUsers } = useRpc(
+    () => authenticatedRpc.getProjectUsers({ projectId: project.id }) as Promise<{ users: ProjectUser[] }>,
+    { deps: [authenticatedRpc, project.id] }
+  );
+  const users = usersResult?.users ?? [];
+  const [showApiKey, setShowApiKey] = useState(false);
 
-  const fetchUsers = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await authenticatedRpc.getProjectUsers({ projectId: project.id });
-      setUsers(result.users);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
+  const {
+    mutate: fetchApiKey,
+    isLoading: apiKeyLoading,
+    data: apiKeyData,
+    error: apiKeyError,
+  } = useRpcMutation(
+    async () => {
+      const result = await authenticatedRpc.getProjectApiKey({ projectId: project.id });
+      return result.apiKey;
     }
-  }, [authenticatedRpc, project.id]);
+  );
+  const apiKey = apiKeyData;
 
-  React.useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
-
-  const toggleApiKey = React.useCallback(async () => {
+  const toggleApiKey = async () => {
     if (showApiKey) {
       setShowApiKey(false);
       return;
     }
-
-    setApiKeyError(null);
     setShowApiKey(true);
     if (apiKey) return;
-
-    try {
-      setApiKeyLoading(true);
-      const result = await authenticatedRpc.getProjectApiKey({ projectId: project.id });
-      setApiKey(result.apiKey);
-    } catch (err) {
-      setApiKeyError(getErrorMessage(err));
+    const result = await fetchApiKey();
+    if (!result) {
       setShowApiKey(false);
-    } finally {
-      setApiKeyLoading(false);
     }
-  }, [apiKey, authenticatedRpc, project.id, showApiKey]);
+  };
 
-  const copyApiKey = React.useCallback(async () => {
+  const copyApiKey = async () => {
     if (!apiKey) return;
     await navigator.clipboard.writeText(apiKey);
-  }, [apiKey]);
+  };
 
   return (
     <div className="space-y-6">
@@ -367,7 +329,7 @@ function ProjectDetail({ project }: { project: Project }) {
         </CardContent>
       </Card>
 
-      <AddUserForm projectId={project.id} onAdded={fetchUsers} />
+      <AddUserForm projectId={project.id} onAdded={refetchUsers} />
 
       {error && (
         <Card className="border-destructive">
@@ -402,7 +364,7 @@ function ProjectDetail({ project }: { project: Project }) {
                     key={user.userId}
                     user={user}
                     projectId={project.id}
-                    onUpdated={fetchUsers}
+                    onUpdated={refetchUsers}
                   />
                 ))}
               </div>
@@ -420,32 +382,31 @@ function ProjectDetail({ project }: { project: Project }) {
 
 function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () => void }) {
   const { authenticatedRpc } = useAuth();
-  const [email, setEmail] = React.useState("");
-  const [permissions, setPermissions] = React.useState<ProjectPermission[]>(["PROJECT_READ_USERS", "PROJECT_READ_EVENTS"]);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [permissions, setPermissions] = useState<ProjectPermission[]>([ProjectPermission.PROJECT_READ_USERS, ProjectPermission.PROJECT_READ_EVENTS]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || permissions.length === 0) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (authenticatedRpc.addUserToProject as any)({
+  const { mutate: addUser, isLoading: loading, error } = useRpcMutation(
+    async (userEmail: string, perms: ProjectPermission[]) => {
+      await authenticatedRpc.addUserToProject({
         projectId,
-        userEmail: email.trim(),
-        permissions,
+        userEmail,
+        permissions: perms,
       });
-      setEmail("");
-      setPermissions(["PROJECT_READ_USERS", "PROJECT_READ_EVENTS"]);
-      onAdded();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
+    },
+    {
+      onSuccess: () => {
+        setEmail("");
+        setPermissions([ProjectPermission.PROJECT_READ_USERS, ProjectPermission.PROJECT_READ_EVENTS]);
+        onAdded();
+      },
     }
+  );
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = email.trim();
+    if (!trimmed || permissions.length === 0) return;
+    void addUser(trimmed, permissions);
   };
 
   const togglePermission = (perm: ProjectPermission) => {
@@ -486,8 +447,8 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={permissions.includes("PROJECT_READ_USERS")}
-                onChange={() => togglePermission("PROJECT_READ_USERS")}
+                checked={permissions.includes(ProjectPermission.PROJECT_READ_USERS)}
+                onChange={() => togglePermission(ProjectPermission.PROJECT_READ_USERS)}
                 className="rounded border-gray-300"
               />
               <Eye className="size-4" />
@@ -496,8 +457,8 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={permissions.includes("PROJECT_READ_EVENTS")}
-                onChange={() => togglePermission("PROJECT_READ_EVENTS")}
+                checked={permissions.includes(ProjectPermission.PROJECT_READ_EVENTS)}
+                onChange={() => togglePermission(ProjectPermission.PROJECT_READ_EVENTS)}
                 className="rounded border-gray-300"
               />
               <History className="size-4" />
@@ -506,8 +467,8 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={permissions.includes("PROJECT_MANAGE_USERS")}
-                onChange={() => togglePermission("PROJECT_MANAGE_USERS")}
+                checked={permissions.includes(ProjectPermission.PROJECT_MANAGE_USERS)}
+                onChange={() => togglePermission(ProjectPermission.PROJECT_MANAGE_USERS)}
                 className="rounded border-gray-300"
               />
               <Shield className="size-4" />
@@ -516,8 +477,8 @@ function AddUserForm({ projectId, onAdded }: { projectId: string; onAdded: () =>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={permissions.includes("PROJECT_READ_API_KEY")}
-                onChange={() => togglePermission("PROJECT_READ_API_KEY")}
+                checked={permissions.includes(ProjectPermission.PROJECT_READ_API_KEY)}
+                onChange={() => togglePermission(ProjectPermission.PROJECT_READ_API_KEY)}
                 className="rounded border-gray-300"
               />
               <KeyRound className="size-4" />
@@ -548,52 +509,50 @@ function UserRow({
   onUpdated: () => void;
 }) {
   const { authenticatedRpc } = useAuth();
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
 
-  const handleRemove = async () => {
-    if (!confirm(`Remove ${user.email} from this project?`)) return;
-
-    try {
-      setLoading(true);
-      setError(null);
+  const { mutate: removeUser, isLoading: removeLoading, error: removeError } = useRpcMutation(
+    async () => {
       await authenticatedRpc.removeUserFromProject({
         projectId,
         userIdToRemove: user.userId,
       });
-      onUpdated();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    { onSuccess: onUpdated }
+  );
 
-  const togglePermission = async (perm: ProjectPermission) => {
-    const newPermissions = user.permissions.includes(perm)
-      ? user.permissions.filter((p) => p !== perm)
-      : [...user.permissions, perm];
-
-    if (newPermissions.length === 0) {
-      setError("User must have at least one permission");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
+  const { mutate: updatePermissions, isLoading: updateLoading, error: updateError } = useRpcMutation(
+    async (newPermissions: ProjectPermission[]) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (authenticatedRpc.updateUserProjectPermissions as any)({
         projectId,
         userIdToUpdate: user.userId,
         permissions: newPermissions,
       });
-      onUpdated();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
+    },
+    { onSuccess: onUpdated }
+  );
+
+  const loading = removeLoading || updateLoading;
+  const error = removeError || updateError || permissionError;
+
+  const handleRemove = () => {
+    if (!confirm(`Remove ${user.email} from this project?`)) return;
+    void removeUser();
+  };
+
+  const togglePermission = (perm: ProjectPermission) => {
+    setPermissionError(null);
+    const newPermissions = user.permissions.includes(perm)
+      ? user.permissions.filter((p) => p !== perm)
+      : [...user.permissions, perm];
+
+    if (newPermissions.length === 0) {
+      setPermissionError("User must have at least one permission");
+      return;
     }
+
+    void updatePermissions(newPermissions);
   };
 
   return (
@@ -604,8 +563,8 @@ function UserRow({
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
-              checked={user.permissions.includes("PROJECT_READ_USERS")}
-              onChange={() => togglePermission("PROJECT_READ_USERS")}
+              checked={user.permissions.includes(ProjectPermission.PROJECT_READ_USERS)}
+              onChange={() => togglePermission(ProjectPermission.PROJECT_READ_USERS)}
               disabled={loading}
               className="rounded border-gray-300"
             />
@@ -615,8 +574,8 @@ function UserRow({
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
-              checked={user.permissions.includes("PROJECT_READ_EVENTS")}
-              onChange={() => togglePermission("PROJECT_READ_EVENTS")}
+              checked={user.permissions.includes(ProjectPermission.PROJECT_READ_EVENTS)}
+              onChange={() => togglePermission(ProjectPermission.PROJECT_READ_EVENTS)}
               disabled={loading}
               className="rounded border-gray-300"
             />
@@ -626,8 +585,8 @@ function UserRow({
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
-              checked={user.permissions.includes("PROJECT_MANAGE_USERS")}
-              onChange={() => togglePermission("PROJECT_MANAGE_USERS")}
+              checked={user.permissions.includes(ProjectPermission.PROJECT_MANAGE_USERS)}
+              onChange={() => togglePermission(ProjectPermission.PROJECT_MANAGE_USERS)}
               disabled={loading}
               className="rounded border-gray-300"
             />
@@ -637,8 +596,8 @@ function UserRow({
           <label className="flex items-center gap-1 cursor-pointer text-xs">
             <input
               type="checkbox"
-              checked={user.permissions.includes("PROJECT_READ_API_KEY")}
-              onChange={() => togglePermission("PROJECT_READ_API_KEY")}
+              checked={user.permissions.includes(ProjectPermission.PROJECT_READ_API_KEY)}
+              onChange={() => togglePermission(ProjectPermission.PROJECT_READ_API_KEY)}
               disabled={loading}
               className="rounded border-gray-300"
             />
@@ -663,62 +622,77 @@ function UserRow({
   );
 }
 
+type WebhookEventsResponse = {
+  events: { id: string; projectId: string; type: string; data: unknown; receivedAt: string; actorEmail?: string }[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+function parseWebhookEvents(result: WebhookEventsResponse): WebhookEvent[] {
+  return result.events
+    .filter((e) => e.type === EventType.WEBHOOK_RECEIVED)
+    .map((e) => ({
+      ...e,
+      type: EventType.WEBHOOK_RECEIVED,
+      data: e.data as WebhookEventData,
+    }));
+}
+
 function WebhookEvents({ projectId }: { projectId: string }) {
   const { authenticatedRpc } = useAuth();
-  const [events, setEvents] = React.useState<WebhookEvent[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [total, setTotal] = React.useState(0);
-  const [showAll, setShowAll] = React.useState(false);
-  const [loadingMore, setLoadingMore] = React.useState(false);
-  const [cursor, setCursor] = React.useState<string | null>(null);
-  const [hasMore, setHasMore] = React.useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [additionalEvents, setAdditionalEvents] = useState<WebhookEvent[]>([]);
 
-  const fetchEvents = React.useCallback(async (append = false, cursorId?: string) => {
-    try {
-      if (append) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
-      const limit = showAll || append ? 20 : 3;
-      const result = await authenticatedRpc.getEvents({ 
-        projectId, 
+  const limit = showAll ? 20 : 3;
+  const { data, isLoading: loading, error } = useRpc(
+    () => authenticatedRpc.getEvents({
+      projectId,
+      type: EventType.WEBHOOK_RECEIVED,
+      limit,
+    }) as Promise<WebhookEventsResponse>,
+    { deps: [authenticatedRpc, projectId, limit] }
+  );
+
+  const initialEvents = data ? parseWebhookEvents(data) : [];
+  const events = [...initialEvents, ...additionalEvents];
+  const cursor = additionalEvents.length > 0 ? null : data?.nextCursor ?? null;
+  const hasMore = data?.hasMore ?? false;
+
+  const { mutate: loadMore, isLoading: loadingMore, data: loadMoreData } = useRpcMutation(
+    async (cursorId: string) => {
+      const result = await authenticatedRpc.getEvents({
+        projectId,
         type: EventType.WEBHOOK_RECEIVED,
-        limit,
+        limit: 20,
         cursor: cursorId,
-      });
-      const webhookEvents = result.events.filter((e) => e.type === EventType.WEBHOOK_RECEIVED) as WebhookEvent[];
-      if (append) {
-        setEvents(prev => [...prev, ...webhookEvents]);
-      } else {
-        setEvents(webhookEvents);
-      }
-      setTotal(result.total);
-      setHasMore(webhookEvents.length === limit && (append ? events.length + webhookEvents.length : webhookEvents.length) < result.total);
-      if (webhookEvents.length > 0) {
-        setCursor(webhookEvents[webhookEvents.length - 1]!.id);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      }) as WebhookEventsResponse;
+      return result;
+    },
+    {
+      onSuccess: (result) => {
+        const newEvents = parseWebhookEvents(result);
+        setAdditionalEvents((prev) => [...prev, ...newEvents]);
+      },
     }
-  }, [authenticatedRpc, projectId, showAll, events.length]);
+  );
 
-  React.useEffect(() => {
-    fetchEvents();
-  }, [showAll]);
+  // Track cursor and hasMore from loadMore results
+  const currentCursor = loadMoreData?.nextCursor ?? cursor;
+  const currentHasMore = loadMoreData ? loadMoreData.hasMore : hasMore;
+
+  // Reset additional events when showAll changes
+  const handleShowAll = () => {
+    setAdditionalEvents([]);
+    setShowAll(true);
+  };
 
   const handleLoadMore = () => {
-    if (cursor && hasMore) {
-      fetchEvents(true, cursor);
+    if (currentCursor && currentHasMore) {
+      void loadMore(currentCursor);
     }
   };
 
-  const getMethodColor = (method: WebhookEvent["httpMethod"]) => {
+  const getMethodColor = (method: WebhookEventData["httpMethod"]) => {
     switch (method) {
       case "GET":
         return "text-green-600 bg-green-100";
@@ -765,11 +739,6 @@ function WebhookEvents({ projectId }: { projectId: string }) {
               Incoming webhook events for this project.
             </CardDescription>
           </div>
-          {total > 0 && (
-            <div className="text-sm text-muted-foreground">
-              {total} total
-            </div>
-          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -792,15 +761,15 @@ function WebhookEvents({ projectId }: { projectId: string }) {
             {displayEvents.map((event) => (
               <div key={event.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
                 <div className="flex-shrink-0">
-                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-mono font-medium ${getMethodColor(event.httpMethod)}`}>
-                    {event.httpMethod}
+                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-mono font-medium ${getMethodColor(event.data.httpMethod)}`}>
+                    {event.data.httpMethod}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <code className="text-sm font-mono truncate">{event.path}</code>
-                    {event.queryString && (
-                      <span className="text-xs text-muted-foreground truncate">?{event.queryString}</span>
+                    <code className="text-sm font-mono truncate">{event.data.path}</code>
+                    {event.data.queryString && (
+                      <span className="text-xs text-muted-foreground truncate">?{event.data.queryString}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
@@ -808,16 +777,16 @@ function WebhookEvents({ projectId }: { projectId: string }) {
                       <Clock className="size-3" />
                       {formatDate(event.receivedAt)}
                     </span>
-                    {event.sourceIp && (
+                    {event.data.sourceIp && (
                       <span className="flex items-center gap-1">
                         <Globe className="size-3" />
-                        {event.sourceIp}
+                        {event.data.sourceIp}
                       </span>
                     )}
-                    {event.body && (
+                    {event.data.body && (
                       <span className="flex items-center gap-1">
                         <FileJson className="size-3" />
-                        {event.body.length} bytes
+                        {event.data.body.length} bytes
                       </span>
                     )}
                   </div>
@@ -825,18 +794,18 @@ function WebhookEvents({ projectId }: { projectId: string }) {
               </div>
             ))}
             
-            {!showAll && total > 3 && (
+            {!showAll && hasMore && (
               <Button 
                 variant="outline" 
                 className="w-full"
-                onClick={() => setShowAll(true)}
+                onClick={handleShowAll}
               >
                 View all webhooks
                 <ChevronRight className="size-4 ml-2" />
               </Button>
             )}
             
-            {showAll && hasMore && (
+            {showAll && currentHasMore && (
               <Button 
                 variant="outline" 
                 className="w-full"
@@ -854,7 +823,7 @@ function WebhookEvents({ projectId }: { projectId: string }) {
               </Button>
             )}
             
-            {showAll && !hasMore && events.length > 3 && (
+            {showAll && !currentHasMore && events.length > 3 && (
               <p className="text-xs text-muted-foreground text-center pt-2">
                 Showing all {events.length} events
               </p>
@@ -868,29 +837,22 @@ function WebhookEvents({ projectId }: { projectId: string }) {
 
 function ActivityLog({ projectId }: { projectId: string }) {
   const { authenticatedRpc } = useAuth();
-  const [events, setEvents] = React.useState<ProjectActivityEvent[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [total, setTotal] = React.useState(0);
-
-  const fetchEvents = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await authenticatedRpc.getEvents({ projectId, limit: 20 });
-      const activityEvents = result.events.filter((e) => e.type.startsWith("PROJECT_")) as ProjectActivityEvent[];
-      setEvents(activityEvents);
-      setTotal(result.total);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [authenticatedRpc, projectId]);
-
-  React.useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  const { data: eventsResult, isLoading: loading, error } = useRpc(
+    () =>
+      authenticatedRpc.getEvents({ projectId, limit: 20 }) as Promise<{
+        events: EventDto[];
+        nextCursor: string | null;
+        hasMore: boolean;
+      }>,
+    { deps: [authenticatedRpc, projectId] }
+  );
+  const events: ProjectActivityEvent[] = (eventsResult?.events ?? [])
+    .filter((e) => e.type.startsWith("PROJECT_"))
+    .map((e) => ({
+      ...e,
+      type: e.type as ProjectActivityEventType,
+      data: e.data as ProjectActivityEventData,
+    }));
 
   const getEventIcon = (eventType: ProjectActivityEvent["type"]) => {
     switch (eventType) {
@@ -982,11 +944,6 @@ function ActivityLog({ projectId }: { projectId: string }) {
                 </div>
               </div>
             ))}
-            {total > events.length && (
-              <p className="text-xs text-muted-foreground text-center pt-2">
-                Showing {events.length} of {total} events
-              </p>
-            )}
           </div>
         )}
       </CardContent>

@@ -1,12 +1,6 @@
+import { ProjectPermission } from "@/lib/project-permissions";
 import type { SQL } from "bun";
 import type { UUID } from "crypto";
-
-export enum ProjectPermission {
-  PROJECT_MANAGE_USERS = "PROJECT_MANAGE_USERS",
-  PROJECT_READ_USERS = "PROJECT_READ_USERS",
-  PROJECT_READ_EVENTS = "PROJECT_READ_EVENTS",
-  PROJECT_READ_API_KEY = "PROJECT_READ_API_KEY",
-}
 
 type ProjectDbRow = {
   id: UUID;

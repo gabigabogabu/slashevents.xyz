@@ -12,8 +12,8 @@ import {
   checkUserHasProjectPermission,
   checkUserHasAnyProjectPermission,
   getProjectUsers,
-  ProjectPermission,
 } from "./project";
+import { ProjectPermission } from "@/lib/project-permissions";
 import { insertUser } from "./user";
 import { getTestDb, resetTestDb } from "../test-setup";
 

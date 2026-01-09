@@ -2,7 +2,9 @@ import type { SQL } from "bun";
 import type { UUID } from "crypto";
 
 import * as queries from "@/server/db/queries";
-import { HttpMethod, EventType } from "@/server/db/queries/event";
+import { HttpMethod } from "@/server/db/queries/event";
+import { decodeEventsCursor, encodeEventsCursor } from "./events-cursor";
+import { EventType } from "@/lib/event-types";
 
 const HTTP_METHOD_MAP: Record<string, HttpMethod | undefined> = {
   GET: HttpMethod.GET,
@@ -23,13 +25,14 @@ type IngressParams = {
   queryString: string | null;
   sourceIp: string | null;
   sourcePort: number | null;
+  receivedAt?: Date
 };
 
 export const handleIngress = async (
   params: IngressParams,
   { db }: { db: SQL }
 ): Promise<{ eventId: UUID } | { error: string; status: number }> => {
-  const { projectId, path, method, headers, body, queryString, sourceIp, sourcePort } = params;
+  const { projectId, path, method, headers, body, queryString, sourceIp, sourcePort, receivedAt } = params;
 
   // Validate HTTP method
   const httpMethod = HTTP_METHOD_MAP[method.toUpperCase()];
@@ -53,6 +56,7 @@ export const handleIngress = async (
       sourceIp,
       sourcePort,
     },
+    receivedAt
   });
 
   if (!eventId)
@@ -66,20 +70,35 @@ export type EventDto = {
   type: EventType;
   data: queries.WebhookEventData | queries.ProjectActivityEventData;
   receivedAt: string;
-  actorEmail?: string;
+  actorEmail: string | null;
+};
+
+export type GetEventsResult = {
+  events: EventDto[];
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 export const getEvents = async (
-  params: { projectId: UUID; type?: EventType; limit?: number; cursor?: UUID },
+  params: { projectId: UUID; limit: number; type?: EventType; cursor?: string },
   { db }: { db: SQL }
-): Promise<EventDto[]> => {
+): Promise<GetEventsResult> => {
+  const decodedCursor = params.cursor
+    ? decodeEventsCursor(params.cursor)
+    : undefined;
+
   const events = await queries.getEvents(db, {
     project_id: params.projectId,
     type: params.type,
-    limit: params.limit,
-    cursor: params.cursor,
+    limit: params.limit + 1,
+    cursor: decodedCursor
+      ? { id: decodedCursor.id }
+      : undefined,
   });
-  return events.map((e) => ({
+
+  const limitedEvents = events.slice(0, params.limit);
+  
+  const mapped: EventDto[] = limitedEvents.map((e) => ({
     id: e.id,
     projectId: e.project_id,
     type: e.type,
@@ -87,6 +106,13 @@ export const getEvents = async (
     receivedAt: e.received_at,
     actorEmail: e.actor_email,
   }));
+
+  const hasMore = events.length > params.limit;
+  const lastEvent = mapped[mapped.length - 1];
+  const nextCursor = lastEvent && hasMore
+    ? encodeEventsCursor({ id: lastEvent.id })
+    : null;
+  return { events: mapped, nextCursor, hasMore };
 };
 
 const sleep = async (ms: number): Promise<void> => {
@@ -98,9 +124,9 @@ const sleep = async (ms: number): Promise<void> => {
 export const getEventsLongPoll = async (
   params: {
     projectId: UUID;
+    limit: number;
     type?: EventType;
-    limit?: number;
-    cursor?: UUID;
+    cursor?: string;
     longPollDurationSeconds?: number;
   },
   { db }: { db: SQL }
@@ -110,17 +136,17 @@ export const getEventsLongPoll = async (
   const startedAt = Date.now();
   const deadline = startedAt + maxWaitMs;
 
-  let events: Awaited<ReturnType<typeof getEvents>> = [];
+  let result: Awaited<ReturnType<typeof getEvents>> = { events: [], nextCursor: null, hasMore: false };
   do {
-    events = await getEvents(params, { db });
+    result = await getEvents(params, { db });
     if (!params.longPollDurationSeconds) break; // not requested to long-poll
     if (params.longPollDurationSeconds <= 0) break; // not requested to long-poll
-    if (events.length > 0) break; // we have events
+    if (result.events.length > 0) break; // we have events
 
     // retry
     const remainingMs = deadline - Date.now();
     await sleep(Math.min(delayBetweenLoopsMs, remainingMs));
-  } while (Date.now() < deadline && events.length === 0);
+  } while (Date.now() < deadline && result.events.length === 0);
 
-  return events;
+  return result;
 };

@@ -2,8 +2,6 @@ import type { SQL } from "bun";
 import type { UUID } from "crypto";
 import { EventType } from "@/lib/event-types";
 
-export { EventType };
-
 export enum HttpMethod {
   GET = "GET",
   POST = "POST",
@@ -45,7 +43,7 @@ export type ProjectActivityEventData = {
 };
 
 type EventWithActorEmail = EventDbRow & {
-  actor_email?: string;
+  actor_email: string | null;
 };
 
 // ============ Insert Events ============
@@ -55,11 +53,13 @@ export const insertWebhookEvent = async (
   params: {
     project_id: UUID;
     data: WebhookEventData;
+    receivedAt?: Date
   }
 ): Promise<UUID | undefined> => {
+  const receivedAtValue = params.receivedAt ? db`${params.receivedAt}` : `NOW()`
   const res = await db`
-    INSERT INTO events (project_id, type, data)
-    VALUES (${params.project_id}, ${EventType.WEBHOOK_RECEIVED}, ${params.data})
+    INSERT INTO events (project_id, type, data, received_at)
+    VALUES (${params.project_id}, ${EventType.WEBHOOK_RECEIVED}, ${params.data}, ${receivedAtValue})
     RETURNING id;
   ` as { id: UUID }[];
   return res[0]?.id;
@@ -90,12 +90,12 @@ export const insertProjectActivityEvent = async (
 
 export const getEvents = async (
   db: SQL,
-  params: { project_id: UUID; type?: EventType; limit?: number; cursor?: UUID }
+  params: { project_id: UUID; type?: EventType; limit?: number; cursor?: { id: UUID } }
 ): Promise<EventWithActorEmail[]> => {
   const limit = params.limit ?? 50;
 
   const typeFilter = params.type ? db`AND e.type = ${params.type}` : db``;
-  const cursorFilter = params.cursor ? db`AND e.received_at < (SELECT received_at FROM events WHERE id = ${params.cursor})` : db``;
+  const cursorFilter = params.cursor ? db`AND e.received_at > (SELECT received_at FROM events WHERE id = ${params.cursor.id})` : db``;
   
   return await db`
     SELECT 
@@ -106,9 +106,23 @@ export const getEvents = async (
     WHERE e.project_id = ${params.project_id}
       ${typeFilter}
       ${cursorFilter}
-    ORDER BY e.received_at DESC
+    ORDER BY e.received_at ASC, e.id ASC
     LIMIT ${limit};
   ` as EventWithActorEmail[];
+};
+
+export const countEvents = async (
+  db: SQL,
+  params: { project_id: UUID; type?: EventType }
+): Promise<number> => {
+  const typeFilter = params.type ? db`AND type = ${params.type}` : db``;
+  const res = await db`
+    SELECT COUNT(*)::int as count
+    FROM events
+    WHERE project_id = ${params.project_id}
+      ${typeFilter};
+  ` as { count: number }[];
+  return res[0]?.count ?? 0;
 };
 
 // ============ Other Operations ============

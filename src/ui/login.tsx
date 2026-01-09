@@ -9,9 +9,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getErrorMessage } from "@/lib/errors";
 import { Link } from "@/ui/router";
 import { useAuth } from "@/ui/auth-context";
+import { useRpcMutation } from "@/ui/use-rpc";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 type Mode = "login" | "signup";
@@ -21,35 +21,40 @@ export function LoginPage() {
   const [mode, setMode] = React.useState<Mode>("login");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [error, setError] = React.useState<string | null>(null);
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [validationError, setValidationError] = React.useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const { mutate: doLogin, isLoading: loginLoading, error: loginError, reset: resetLogin } = useRpcMutation(
+    async (e: string, p: string) => login(e, p)
+  );
+
+  const { mutate: doSignup, isLoading: signupLoading, error: signupError, reset: resetSignup } = useRpcMutation(
+    async (e: string, p: string) => signup(e, p)
+  );
+
+  const isLoading = loginLoading || signupLoading;
+  const error = validationError || (mode === "login" ? loginError : signupError);
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setValidationError(null);
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+      setValidationError("Password must be at least 8 characters");
       return;
     }
 
-    setIsLoading(true);
-    try {
-      if (mode === "login") {
-        await login(email, password);
-      } else {
-        await signup(email, password);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsLoading(false);
+    if (mode === "login") {
+      void doLogin(email, password);
+    } else {
+      void doSignup(email, password);
     }
   };
 
   const switchMode = () => {
     setMode(mode === "login" ? "signup" : "login");
-    setError(null);
+    setValidationError(null);
+    resetLogin();
+    resetSignup();
   };
 
   return (

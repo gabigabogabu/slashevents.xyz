@@ -21,10 +21,8 @@ function AppContent() {
 
   // Check for specific project route first
   const projectId = extractProjectId(pathname);
-  if (projectId) {
+  if (projectId)
     return <ProjectDetailPage projectId={projectId} />;
-  }
-
   if (isActivePath(pathname, "/app/projects"))
     return <ProjectsListPage />;
   

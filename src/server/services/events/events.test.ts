@@ -5,7 +5,8 @@ import type { UUID } from "crypto";
 import { getTestDb, resetTestDb } from "@/server/db/test-setup";
 import * as queries from "@/server/db/queries";
 import { handleIngress, getEvents, getEventsLongPoll } from "./events";
-import { HttpMethod, EventType } from "@/server/db/queries/event";
+import { HttpMethod } from "@/server/db/queries/event";
+import { EventType } from "@/lib/event-types";
 
 describe("events service", () => {
   let db: SQL;
@@ -111,7 +112,7 @@ describe("events service", () => {
       expect(result).toHaveProperty("eventId");
 
       const events = await queries.getEvents(db, { project_id: testProjectId, type: EventType.WEBHOOK_RECEIVED });
-      const event = events.find(e => (e.data as any).path === "/api/status");
+      const event = events.find(e => (e.data as queries.WebhookEventData).path === "/api/status");
       expect(event).toBeDefined();
       const data = event!.data as any;
       expect(data.httpMethod).toBe(HttpMethod.GET);
@@ -128,6 +129,7 @@ describe("events service", () => {
       })) as UUID;
 
       // Create multiple events
+      const now = +new Date()
       for (let i = 0; i < 5; i++) {
         await handleIngress({
           projectId: paginationProjectId,
@@ -138,23 +140,78 @@ describe("events service", () => {
           queryString: null,
           sourceIp: null,
           sourcePort: null,
+          receivedAt: new Date(now + i)
         }, { db });
       }
 
       // Get first page (only webhook events)
       const firstPage = await getEvents({ projectId: paginationProjectId, type: EventType.WEBHOOK_RECEIVED, limit: 3 }, { db });
-      expect(firstPage.length).toBe(3);
+      expect(firstPage.events.length).toBe(3);
+      expect(firstPage.nextCursor).toBeTruthy();
+      expect(firstPage.hasMore).toBe(true);
+      expect(firstPage.events.map(e => (e.data as queries.WebhookEventData).path)).toEqual([0, 1, 2].map(i => `/webhook/pagination-${i}`));
 
       // Get second page using cursor
-      const lastEvent = firstPage[2];
+      const lastEvent = firstPage.events[2];
       expect(lastEvent).toBeDefined();
       const secondPage = await getEvents({
         projectId: paginationProjectId,
         type: EventType.WEBHOOK_RECEIVED,
         limit: 3,
-        cursor: lastEvent!.id
+        cursor: firstPage.nextCursor as string,
       }, { db });
-      expect(secondPage.length).toBe(2);
+      expect(secondPage.events.length).toBe(2);
+      expect(secondPage.nextCursor).toBeNull();
+      expect(secondPage.hasMore).toBe(false);
+      expect(secondPage.events.map(e => (e.data as queries.WebhookEventData).path)).toEqual([3, 4].map(i => `/webhook/pagination-${i}`));
+    });
+
+    // test("can paginate events all with same receivedAt")
+
+    test("returns webhook event", async () => {
+      const webhookEventProjectId = (await queries.insertProject(db, {
+        name: `Webhook Event Project ${Date.now()}`,
+        created_by_user_id: testUserId,
+      })) as UUID;
+
+      const result = await handleIngress({
+        projectId: webhookEventProjectId,
+        path: "/webhook/test",
+        method: "POST",
+        headers: { 'x-test-header': 'testvalue' },
+        body: '{"test": "testbody"}',
+        queryString: 'foo=bar',
+        sourceIp: '192.168.1.1',
+        sourcePort: 12345,
+      }, { db });
+
+      expect(result).toHaveProperty("eventId");
+      expect("error" in result).toBe(false);
+
+      const events = await getEvents({ projectId: webhookEventProjectId, limit: 1, type: EventType.WEBHOOK_RECEIVED }, { db });
+      expect(events.events.length).toBe(1);
+      expect(events).toEqual({
+        hasMore: false,
+        nextCursor: null,
+        events: [
+          {
+            actorEmail: null,
+            id: expect.any(String),
+            projectId: expect.any(String),
+            type: EventType.WEBHOOK_RECEIVED,
+            data: {
+              httpMethod: HttpMethod.POST,
+              path: "/webhook/test",
+              headers: { 'x-test-header': 'testvalue' },
+              body: '{"test": "testbody"}',
+              queryString: 'foo=bar',
+              sourceIp: '192.168.1.1',
+              sourcePort: 12345,
+            },
+            receivedAt: expect.any(Date),
+          }
+        ]
+      });
     });
 
     test("returns empty array for project with no events", async () => {
@@ -164,8 +221,9 @@ describe("events service", () => {
         created_by_user_id: testUserId,
       })) as UUID;
 
-      const result = await getEvents({ projectId: emptyProjectId }, { db });
-      expect(result).toEqual([]);
+      const result = await getEvents({ projectId: emptyProjectId, limit: 2 }, { db });
+      expect(result.events).toEqual([]);
+      expect(result.nextCursor).toBeNull();
     });
 
     test("filters events by type", async () => {
@@ -196,18 +254,18 @@ describe("events service", () => {
       });
 
       // Get all events
-      const allEvents = await getEvents({ projectId: filterProjectId }, { db });
-      expect(allEvents.length).toBe(2);
+      const allEvents = await getEvents({ projectId: filterProjectId, limit: 2 }, { db });
+      expect(allEvents.events.length).toBe(2);
 
       // Get only webhook events
-      const webhookEvents = await getEvents({ projectId: filterProjectId, type: EventType.WEBHOOK_RECEIVED }, { db });
-      expect(webhookEvents.length).toBe(1);
-      expect(webhookEvents[0]?.type).toBe(EventType.WEBHOOK_RECEIVED);
+      const webhookEvents = await getEvents({ projectId: filterProjectId, type: EventType.WEBHOOK_RECEIVED, limit: 2 }, { db });
+      expect(webhookEvents.events.length).toBe(1);
+      expect(webhookEvents.events[0]?.type).toBe(EventType.WEBHOOK_RECEIVED);
 
       // Get only project.created events
-      const activityEvents = await getEvents({ projectId: filterProjectId, type: EventType.PROJECT_CREATED }, { db });
-      expect(activityEvents.length).toBe(1);
-      expect(activityEvents[0]?.type).toBe(EventType.PROJECT_CREATED);
+      const activityEvents = await getEvents({ projectId: filterProjectId, type: EventType.PROJECT_CREATED, limit: 2 }, { db });
+      expect(activityEvents.events.length).toBe(1);
+      expect(activityEvents.events[0]?.type).toBe(EventType.PROJECT_CREATED);
     });
 
     describe("getEventsLongPoll", () => {
@@ -245,7 +303,7 @@ describe("events service", () => {
         const result = await pollPromise;
         const elapsedMs = Date.now() - startMs;
 
-        expect(result.length).toBeGreaterThanOrEqual(1);
+        expect(result.events.length).toBeGreaterThanOrEqual(1);
         expect(elapsedMs).toBeLessThanOrEqual(2500);
       });
 
@@ -265,7 +323,7 @@ describe("events service", () => {
           { db }
         );
 
-        expect(result).toEqual([]);
+        expect(result.events).toEqual([]);
       });
 
       test("does not wait when longPollDurationSeconds is not set", async () => {
@@ -281,7 +339,7 @@ describe("events service", () => {
             limit: 10,
           }, { db }
         );
-        expect(result).toEqual([]);
+        expect(result.events).toEqual([]);
       });
 
       test("waits for the specified duration with no events", async () => {
@@ -300,9 +358,9 @@ describe("events service", () => {
           }, { db }
         );
         const elapsedMs = Date.now() - startMs;
-        
+
         expect(elapsedMs).toBeGreaterThanOrEqual(2000);
-        expect(result).toEqual([]);
+        expect(result.events).toEqual([]);
       });
     });
   });

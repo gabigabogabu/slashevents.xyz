@@ -12,10 +12,10 @@ import { MigrationStatus, runMigrations } from "./db/run-migrations";
 import { userSignup, userLogin, checkUserJwt } from "./services/user/auth";
 import * as projectService from "./services/project/project";
 import * as eventsService from "./services/events/events";
-import { ProjectPermission, checkUserHasProjectPermission } from "./db/queries/project";
+import { checkUserHasProjectPermission } from "./db/queries/project";
+import { ProjectPermission } from "@/lib/project-permissions";
 import { EventType } from "@/lib/event-types";
 import { apiKeyHasReadEventsPermission, checkApiKeyJwt, createApiKeyJwt } from "./services/api-keys/api-keys";
-export { EventType };
 
 const { db, closeDb } = getDb(env);
 const { getMigrationsStatus, migrationPromise } = runMigrations(db);
@@ -144,9 +144,9 @@ export const appRpcHandler = new RpcHandler({
   getEvents: defRpc({
     inputValidation: jwtSchema.extend({
       projectId: z.uuid(),
-      type: z.nativeEnum(EventType).optional(),
-      limit: z.number().int().min(1).max(100).optional(),
-      cursor: z.uuid().optional(),
+      type: z.enum(EventType).optional(),
+      limit: z.number().int().min(1).max(100).default(100),
+      cursor: z.string().optional(),
     }),
     handle: async ({ params }) => {
       const authedParams = handleJwt(params);
@@ -155,14 +155,13 @@ export const appRpcHandler = new RpcHandler({
         user_id: authedParams.actorUserId,
         permission: ProjectPermission.PROJECT_READ_EVENTS,
       });
-      if (!hasPermission) {
+      if (!hasPermission)
         throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
-      }
       return eventsService.getEvents({ 
         projectId: authedParams.projectId as UUID,
         type: authedParams.type,
-        limit: authedParams.limit as number | undefined,
-        cursor: authedParams.cursor as UUID | undefined
+        limit: authedParams.limit,
+        cursor: authedParams.cursor,
       }, { db })
     },
   }),
@@ -177,9 +176,8 @@ export const appRpcHandler = new RpcHandler({
         user_id: authedParams.actorUserId,
         permission: ProjectPermission.PROJECT_READ_API_KEY,
       });
-      if (!hasPermission) {
+      if (!hasPermission)
         throw new RpcError(ErrorCode.PROJECT_NOT_FOUND, 404);
-      }
       const apiKey = createApiKeyJwt({ projectId: authedParams.projectId as UUID }, env.API_JWT_PRIVATE_KEY);
       return { apiKey };
     },
@@ -192,23 +190,31 @@ export type AdminRpc = InferRpc<typeof adminRpcHandler>;
 
 const exampleJwt = jwt.sign({ example: "example" }, 'secret');
 const exampleUUID = crypto.randomUUID();
+const exampleCursor = Buffer.from(
+  JSON.stringify({ v: 1, id: exampleUUID, receivedAt: "2026-01-01T00:00:00.000Z" }),
+  "utf8"
+).toString("base64");
 
 export const apiRpcHandler = new RpcHandler({
   getEvents: defRpc({
     inputValidation: z.object({
       apiKey: z.jwt().describe("The API key to use for authentication.").meta({example: exampleJwt}),
       type: z.enum(EventType).optional().describe("The type of events to retrieve.").meta({example: EventType.WEBHOOK_RECEIVED}),
-      limit: z.number().int().min(1).max(100).optional().describe("The maximum number of events to retrieve.").meta({example: 10}),
-      cursor: z.uuid().optional().describe("The cursor to use for pagination.").meta({example: exampleUUID}),
+      limit: z.number().int().min(1).max(100).optional().default(100).describe("The maximum number of events to retrieve.").meta({example: 10}),
+      cursor: z.string().optional().describe("Opaque pagination cursor from a previous response.").meta({example: exampleCursor}),
       longPollDurationSeconds: z.number().int().min(0).max(60).default(0).describe("Maximum number of seconds to long-poll for events. Defaults to 0 (no waiting).").meta({example: 30}),
     }),
-    outputValidation: z.array(z.object({
-      id: z.uuid().meta({example: exampleUUID}),
-      projectId: z.uuid().meta({example: exampleUUID}),
-      type: z.enum(EventType).meta({example: EventType.WEBHOOK_RECEIVED}),
-      data: z.unknown().meta({example: {}}),
-      receivedAt: z.string().meta({example: "2026-01-01T00:00:00.000Z"}),
-    })),
+    outputValidation: z.object({
+      events: z.array(z.object({
+        id: z.uuid().meta({example: exampleUUID}),
+        projectId: z.uuid().meta({example: exampleUUID}),
+        type: z.enum(EventType).meta({example: EventType.WEBHOOK_RECEIVED}),
+        data: z.unknown().meta({example: {}}),
+        receivedAt: z.string().meta({example: "2026-01-01T00:00:00.000Z"}),
+      })),
+      nextCursor: z.string().nullable().meta({example: exampleCursor}),
+      hasMore: z.boolean().meta({example: false}),
+    }),
     handle: async ({ params }) => {
       const claims = checkApiKeyJwt(params.apiKey, env.API_JWT_PUBLIC_KEY);
       if (!apiKeyHasReadEventsPermission(claims)) {
@@ -219,7 +225,7 @@ export const apiRpcHandler = new RpcHandler({
           projectId: claims.projectId as UUID,
           type: params.type,
           limit: params.limit,
-          cursor: params.cursor as UUID | undefined,
+          cursor: params.cursor,
           longPollDurationSeconds: params.longPollDurationSeconds,
         },
         { db }
@@ -237,13 +243,7 @@ export const closeServer = async () => {
 export const handleWebhook = async (req: Request, server: Bun.Server<unknown>, projectId: string, restOfPath: string): Promise<Response> => {
   try {
     const headers = req.headers.toJSON();
-
-    let body: string | null = null;
-    try {
-      body = await req.text();
-    } catch {
-      body = null;
-    }
+    const body = await req.text().catch(() => null); // will fail for e.g. GET requests
 
     // Extract query string
     const url = new URL(req.url);
@@ -256,7 +256,8 @@ export const handleWebhook = async (req: Request, server: Bun.Server<unknown>, p
 
     const result = await eventsService.handleIngress({
       projectId: projectId as UUID,
-      path: "/" + restOfPath,
+      // path: "/" + restOfPath,
+      path: url.pathname,
       method: req.method,
       headers,
       body,
