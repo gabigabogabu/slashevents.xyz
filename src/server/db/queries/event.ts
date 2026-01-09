@@ -111,18 +111,6 @@ export const getEvents = async (
   ` as EventWithActorEmail[];
 };
 
-export const getEventCount = async (
-  db: SQL,
-  params: { project_id: UUID; type?: EventType }
-): Promise<number> => {
-  const typeFilter = params.type ? db`AND type = ${params.type}` : db``;
-  const res = await db`
-    SELECT COUNT(*) as count FROM events 
-    WHERE project_id = ${params.project_id} ${typeFilter};
-  ` as { count: string }[];
-  return parseInt(res[0]?.count ?? "0", 10);
-};
-
 // ============ Other Operations ============
 
 export const getEventById = async (

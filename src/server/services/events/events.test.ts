@@ -144,7 +144,6 @@ describe("events service", () => {
       // Get first page (only webhook events)
       const firstPage = await getEvents({ projectId: paginationProjectId, type: EventType.WEBHOOK_RECEIVED, limit: 3 }, { db });
       expect(firstPage.events.length).toBe(3);
-      expect(firstPage.total).toBe(5);
 
       // Get second page using cursor
       const lastEvent = firstPage.events[2];
@@ -156,7 +155,6 @@ describe("events service", () => {
         cursor: lastEvent!.id 
       }, { db });
       expect(secondPage.events.length).toBe(2);
-      expect(secondPage.total).toBe(5);
     });
 
     test("returns empty array for project with no events", async () => {
@@ -168,7 +166,6 @@ describe("events service", () => {
 
       const result = await getEvents({ projectId: emptyProjectId }, { db });
       expect(result.events).toEqual([]);
-      expect(result.total).toBe(0);
     });
 
     test("filters events by type", async () => {

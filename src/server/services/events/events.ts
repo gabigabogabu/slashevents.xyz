@@ -100,17 +100,13 @@ export const getEvents = async (
   { db }: { db: SQL }
 ): Promise<{
   events: Event[];
-  total: number;
 }> => {
-  const [events, total] = await Promise.all([
-    queries.getEvents(db, {
+  const events = await queries.getEvents(db, {
       project_id: params.projectId,
-      type: params.type,
-      limit: params.limit,
-      cursor: params.cursor,
-    }),
-    queries.getEventCount(db, { project_id: params.projectId, type: params.type }),
-  ]);
+    type: params.type,
+    limit: params.limit,
+    cursor: params.cursor,
+  });
 
   return {
     events: events.map((e): Event => {
@@ -139,6 +135,5 @@ export const getEvents = async (
         receivedAt: e.received_at,
       };
     }),
-    total,
   };
 };
