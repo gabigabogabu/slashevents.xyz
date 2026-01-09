@@ -200,25 +200,27 @@ export const apiRpcHandler = new RpcHandler({
       type: z.enum(EventType).optional().describe("The type of events to retrieve.").meta({example: EventType.WEBHOOK_RECEIVED}),
       limit: z.number().int().min(1).max(100).optional().describe("The maximum number of events to retrieve.").meta({example: 10}),
       cursor: z.uuid().optional().describe("The cursor to use for pagination.").meta({example: exampleUUID}),
+      longPollDurationSeconds: z.number().int().min(0).max(60).default(0).describe("Maximum number of seconds to long-poll for events. Defaults to 0 (no waiting).").meta({example: 30}),
     }),
-    outputValidation: z.object({
-      events: z.array(z.object({
-        id: z.uuid().meta({example: exampleUUID}),
-        type: z.enum(EventType).meta({example: EventType.WEBHOOK_RECEIVED}),
-        receivedAt: z.string().meta({example: "2026-01-01T00:00:00.000Z"}),
-      })),
-    }),
+    outputValidation: z.array(z.object({
+      id: z.uuid().meta({example: exampleUUID}),
+      projectId: z.uuid().meta({example: exampleUUID}),
+      type: z.enum(EventType).meta({example: EventType.WEBHOOK_RECEIVED}),
+      data: z.unknown().meta({example: {}}),
+      receivedAt: z.string().meta({example: "2026-01-01T00:00:00.000Z"}),
+    })),
     handle: async ({ params }) => {
       const claims = checkApiKeyJwt(params.apiKey, env.API_JWT_PUBLIC_KEY);
       if (!apiKeyHasReadEventsPermission(claims)) {
         throw new RpcError(ErrorCode.FORBIDDEN, 403);
       }
-      return eventsService.getEvents(
+      return eventsService.getEventsLongPoll(
         {
           projectId: claims.projectId as UUID,
           type: params.type,
           limit: params.limit,
           cursor: params.cursor as UUID | undefined,
+          longPollDurationSeconds: params.longPollDurationSeconds,
         },
         { db }
       );

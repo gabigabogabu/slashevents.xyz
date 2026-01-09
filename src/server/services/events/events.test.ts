@@ -4,7 +4,7 @@ import type { UUID } from "crypto";
 
 import { getTestDb, resetTestDb } from "@/server/db/test-setup";
 import * as queries from "@/server/db/queries";
-import { handleIngress, getEvents } from "./events";
+import { handleIngress, getEvents, getEventsLongPoll } from "./events";
 import { HttpMethod, EventType } from "@/server/db/queries/event";
 
 describe("events service", () => {
@@ -143,18 +143,18 @@ describe("events service", () => {
 
       // Get first page (only webhook events)
       const firstPage = await getEvents({ projectId: paginationProjectId, type: EventType.WEBHOOK_RECEIVED, limit: 3 }, { db });
-      expect(firstPage.events.length).toBe(3);
+      expect(firstPage.length).toBe(3);
 
       // Get second page using cursor
-      const lastEvent = firstPage.events[2];
+      const lastEvent = firstPage[2];
       expect(lastEvent).toBeDefined();
-      const secondPage = await getEvents({ 
+      const secondPage = await getEvents({
         projectId: paginationProjectId,
         type: EventType.WEBHOOK_RECEIVED,
-        limit: 3, 
-        cursor: lastEvent!.id 
+        limit: 3,
+        cursor: lastEvent!.id
       }, { db });
-      expect(secondPage.events.length).toBe(2);
+      expect(secondPage.length).toBe(2);
     });
 
     test("returns empty array for project with no events", async () => {
@@ -165,7 +165,7 @@ describe("events service", () => {
       })) as UUID;
 
       const result = await getEvents({ projectId: emptyProjectId }, { db });
-      expect(result.events).toEqual([]);
+      expect(result).toEqual([]);
     });
 
     test("filters events by type", async () => {
@@ -197,17 +197,113 @@ describe("events service", () => {
 
       // Get all events
       const allEvents = await getEvents({ projectId: filterProjectId }, { db });
-      expect(allEvents.events.length).toBe(2);
+      expect(allEvents.length).toBe(2);
 
       // Get only webhook events
       const webhookEvents = await getEvents({ projectId: filterProjectId, type: EventType.WEBHOOK_RECEIVED }, { db });
-      expect(webhookEvents.events.length).toBe(1);
-      expect(webhookEvents.events[0]?.type).toBe(EventType.WEBHOOK_RECEIVED);
+      expect(webhookEvents.length).toBe(1);
+      expect(webhookEvents[0]?.type).toBe(EventType.WEBHOOK_RECEIVED);
 
       // Get only project.created events
       const activityEvents = await getEvents({ projectId: filterProjectId, type: EventType.PROJECT_CREATED }, { db });
-      expect(activityEvents.events.length).toBe(1);
-      expect(activityEvents.events[0]?.type).toBe(EventType.PROJECT_CREATED);
+      expect(activityEvents.length).toBe(1);
+      expect(activityEvents[0]?.type).toBe(EventType.PROJECT_CREATED);
+    });
+
+    describe("getEventsLongPoll", () => {
+      test("long-polls when empty and returns once an event is written", async () => {
+        const projectId = (await queries.insertProject(db, {
+          name: `Long Poll Test ${Date.now()}`,
+          created_by_user_id: testUserId,
+        })) as UUID;
+
+        const startMs = Date.now();
+        const pollPromise = getEventsLongPoll(
+          {
+            projectId,
+            type: EventType.WEBHOOK_RECEIVED,
+            limit: 10,
+            longPollDurationSeconds: 2,
+          },
+          { db }
+        );
+
+        // Insert an event shortly after starting the long-poll.
+        setTimeout(() => {
+          void handleIngress({
+            projectId,
+            path: "/webhook/long-poll",
+            method: "POST",
+            headers: {},
+            body: null,
+            queryString: null,
+            sourceIp: null,
+            sourcePort: null,
+          }, { db });
+        }, 100);
+
+        const result = await pollPromise;
+        const elapsedMs = Date.now() - startMs;
+
+        expect(result.length).toBeGreaterThanOrEqual(1);
+        expect(elapsedMs).toBeLessThanOrEqual(2500);
+      });
+
+      test("does not wait when longPollDurationSeconds is 0", async () => {
+        const projectId = (await queries.insertProject(db, {
+          name: `No Wait Test ${Date.now()}`,
+          created_by_user_id: testUserId,
+        })) as UUID;
+
+        const result = await getEventsLongPoll(
+          {
+            projectId,
+            type: EventType.WEBHOOK_RECEIVED,
+            limit: 10,
+            longPollDurationSeconds: 0,
+          },
+          { db }
+        );
+
+        expect(result).toEqual([]);
+      });
+
+      test("does not wait when longPollDurationSeconds is not set", async () => {
+        const projectId = (await queries.insertProject(db, {
+          name: `No Wait Test ${Date.now()}`,
+          created_by_user_id: testUserId,
+        })) as UUID;
+
+        const result = await getEventsLongPoll(
+          {
+            projectId,
+            type: EventType.WEBHOOK_RECEIVED,
+            limit: 10,
+          }, { db }
+        );
+        expect(result).toEqual([]);
+      });
+
+      test("waits for the specified duration with no events", async () => {
+        const projectId = (await queries.insertProject(db, {
+          name: `No Wait Test ${Date.now()}`,
+          created_by_user_id: testUserId,
+        })) as UUID;
+
+        const startMs = Date.now();
+        const result = await getEventsLongPoll(
+          {
+            projectId,
+            type: EventType.WEBHOOK_RECEIVED,
+            limit: 10,
+            longPollDurationSeconds: 2,
+          }, { db }
+        );
+        const elapsedMs = Date.now() - startMs;
+        
+        expect(elapsedMs).toBeGreaterThanOrEqual(2000);
+        expect(result).toEqual([]);
+      });
     });
   });
 });

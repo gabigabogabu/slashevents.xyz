@@ -1,8 +1,8 @@
 import type { SQL } from "bun";
 import type { UUID } from "crypto";
-import { EventType, isWebhookEvent } from "@/lib/event-types";
+import { EventType } from "@/lib/event-types";
 
-export { EventType, isWebhookEvent };
+export { EventType };
 
 export enum HttpMethod {
   GET = "GET",

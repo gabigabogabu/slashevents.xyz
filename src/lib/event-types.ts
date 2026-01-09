@@ -6,8 +6,3 @@ export enum EventType {
   PROJECT_USER_PERMISSION_GRANTED = "PROJECT_USER_PERMISSION_GRANTED",
   PROJECT_USER_PERMISSION_REVOKED = "PROJECT_USER_PERMISSION_REVOKED",
 }
-
-export const isWebhookEvent = (type: EventType): boolean => {
-  return type.startsWith("WEBHOOK_");
-};
-
