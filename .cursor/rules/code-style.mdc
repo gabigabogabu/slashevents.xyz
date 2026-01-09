@@ -15,3 +15,4 @@ alwaysApply: true
 - When asked to fix an error, first add a test case to reproduce it and then fix it.
 - Only write useful comments. Comments which just repeat the code can be removed.
 - Enums should be ALL_CAPS, also in the DB.
+- We're using zod v4. `z.nativeEnum()` is deprecated, use `z.enum()`.

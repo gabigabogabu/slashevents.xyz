@@ -105,7 +105,7 @@ export const appRpcHandler = new RpcHandler({
     inputValidation: jwtSchema.extend({
       projectId: z.uuid(),
       userEmail: z.email(),
-      permissions: z.array(z.nativeEnum(ProjectPermission)),
+      permissions: z.array(z.enum(ProjectPermission)),
     }),
     handle: ({ params }) => {
       const authedParams = handleJwt(params);
@@ -130,7 +130,7 @@ export const appRpcHandler = new RpcHandler({
     inputValidation: jwtSchema.extend({
       projectId: z.uuid(),
       userIdToUpdate: z.uuid(),
-      permissions: z.array(z.nativeEnum(ProjectPermission)),
+      permissions: z.array(z.enum(ProjectPermission)),
     }),
     handle: ({ params }) => {
       const authedParams = handleJwt(params);

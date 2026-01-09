@@ -104,7 +104,7 @@ describe("generateDocs", () => {
     const handler = new RpcHandler({
       testMethod: defRpc({
         inputValidation: z.object({
-          status: z.nativeEnum(TestEnum),
+          status: z.enum(TestEnum),
         }),
         handle: async () => {},
       }),
@@ -120,7 +120,7 @@ describe("generateDocs", () => {
     const handler = new RpcHandler({
       testMethod: defRpc({
         inputValidation: z.object({
-          status: z.nativeEnum(TestEnum).optional(),
+          status: z.enum(TestEnum).optional(),
         }),
         handle: async () => {},
       }),
@@ -380,7 +380,7 @@ describe("generateMarkdownDocs", () => {
     const handler = new RpcHandler({
       testMethod: defRpc({
         inputValidation: z.object({
-          status: z.nativeEnum(TestEnum),
+          status: z.enum(TestEnum),
         }),
         handle: async () => {},
       }),
