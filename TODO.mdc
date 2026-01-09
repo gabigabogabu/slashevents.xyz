@@ -23,6 +23,6 @@ After completing a task, check that the tests and the build are green.
 - [x] Add Events
 - [x] Add ApiKeys
 - [x] Add apiRpc endpoints
+- [x] Add auto-generated API docs from the apiRpc handlers
 - [ ] Add webhook path allowlist
-- [ ] Add auto-generated API docs from the apiRpc handlers
 - Add Okta auth

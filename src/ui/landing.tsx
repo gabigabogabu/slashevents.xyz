@@ -19,6 +19,12 @@ export function LandingPage() {
         >
           try it
         </Link>
+        <Link
+          to="/docs"
+          className="text-lg underline underline-offset-4 hover:text-primary transition-colors"
+        >
+          api docs
+        </Link>
       </div>
     </div>
   );

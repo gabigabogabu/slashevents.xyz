@@ -1,5 +1,6 @@
 import type { SQL } from "bun";
 import type { UUID } from "crypto";
+import jwt from "jsonwebtoken";
 import { z } from "zod";
 
 import { env } from "./env";
@@ -16,13 +17,6 @@ import { EventType } from "@/lib/event-types";
 import { apiKeyHasReadEventsPermission, checkApiKeyJwt, createApiKeyJwt } from "./services/api-keys/api-keys";
 export { EventType };
 
-enum HttpStatus {
-  OK = 200,
-  NO_CONTENT = 204,
-  BAD_REQUEST = 400,
-  SERVER_ERROR = 500,
-}
-
 const { db, closeDb } = getDb(env);
 const { getMigrationsStatus, migrationPromise } = runMigrations(db);
 
@@ -30,24 +24,6 @@ const okResponse = new Response("OK", { status: 200 });
 const ngResponse = new Response("NG", { status: 500 });
 export const isAppAlive = async () => (await isDbUp(db)) ? okResponse : ngResponse;
 export const isAppReady = async () => (await isDbUp(db) && ((await getMigrationsStatus()) === MigrationStatus.COMPLETED)) ? okResponse : ngResponse;
-
-const handleBunServe = <T extends Record<string, any>>(handler: RpcHandler<T>) => {
-  const serve = async (req: Request): Promise<Response> => {
-    try {
-      const rpcReq = await req.json();
-      const result = await handler.handle(rpcReq);
-      if ('error' in result)
-        return Response.json(result, { status: HttpStatus.BAD_REQUEST });
-      if (result.id === null || result.id === undefined)
-        return new Response(null, { status: HttpStatus.NO_CONTENT });
-      return Response.json(result, { status: HttpStatus.OK });
-    } catch (error) {
-      console.error('Unhandled error in RPC handler', error);
-      return new Response(null, { status: HttpStatus.SERVER_ERROR });
-    }
-  };
-  return serve as typeof serve & { _rpcType: InferRpc<RpcHandler<T>> };
-};
 
 // Helper to extract user ID from JWT in authenticated endpoints
 const withAuth = <P extends { jwt: string }, R>(
@@ -74,7 +50,7 @@ const handleJwt = <P extends { jwt: string }>(params: P) => {
 
 const jwtSchema = z.object({ jwt: z.string() });
 
-const _appRpcHandler = new RpcHandler({
+export const appRpcHandler = new RpcHandler({
   userSignup: defRpc({
     inputValidation: z.object({
       email: z.email(),
@@ -209,21 +185,28 @@ const _appRpcHandler = new RpcHandler({
     },
   }),
 });
+export type AppRpc = InferRpc<typeof appRpcHandler>;
 
-export const appRpc = handleBunServe(_appRpcHandler);
-export type AppRpc = typeof appRpc._rpcType;
+export const adminRpcHandler = new RpcHandler({});
+export type AdminRpc = InferRpc<typeof adminRpcHandler>;
 
-const _adminRpcHandler = new RpcHandler({});
-export const adminRpc = handleBunServe(_adminRpcHandler);
-export type AdminRpc = typeof adminRpc._rpcType;
+const exampleJwt = jwt.sign({ example: "example" }, 'secret');
+const exampleUUID = crypto.randomUUID();
 
-const _apiRpcHandler = new RpcHandler({
+export const apiRpcHandler = new RpcHandler({
   getEvents: defRpc({
     inputValidation: z.object({
-      apiKey: z.string(),
-      type: z.nativeEnum(EventType).optional(),
-      limit: z.number().int().min(1).max(100).optional(),
-      cursor: z.uuid().optional(),
+      apiKey: z.jwt().describe("The API key to use for authentication.").meta({example: exampleJwt}),
+      type: z.enum(EventType).optional().describe("The type of events to retrieve.").meta({example: EventType.WEBHOOK_RECEIVED}),
+      limit: z.number().int().min(1).max(100).optional().describe("The maximum number of events to retrieve.").meta({example: 10}),
+      cursor: z.uuid().optional().describe("The cursor to use for pagination.").meta({example: exampleUUID}),
+    }),
+    outputValidation: z.object({
+      events: z.array(z.object({
+        id: z.uuid().meta({example: exampleUUID}),
+        type: z.enum(EventType).meta({example: EventType.WEBHOOK_RECEIVED}),
+        receivedAt: z.string().meta({example: "2026-01-01T00:00:00.000Z"}),
+      })),
     }),
     handle: async ({ params }) => {
       const claims = checkApiKeyJwt(params.apiKey, env.API_JWT_PUBLIC_KEY);
@@ -242,8 +225,7 @@ const _apiRpcHandler = new RpcHandler({
     },
   }),
 });
-export const apiRpc = handleBunServe(_apiRpcHandler);
-export type ApiRpc = typeof apiRpc._rpcType;
+export type ApiRpc = InferRpc<typeof apiRpcHandler>;
 
 export const closeServer = async () => {
   await closeDb();

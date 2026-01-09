@@ -69,7 +69,7 @@ type CacheConfig<Result> = {
 // optional auth and rateLimit that will be defaulted
 type RpcDefInit<ParamsType, AuthMeta = unknown, RateLimitMeta = unknown, ResultType = unknown> =
   Pick<RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType>, 'inputValidation' | 'handle'> &
-  Partial<Pick<RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType>, 'auth' | 'rateLimit' | 'cache'>>;
+  Partial<Pick<RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType>, 'auth' | 'rateLimit' | 'cache' | 'outputValidation'>>;
 /**
  * Utility function to define an RPC
  * @param def 
@@ -77,14 +77,16 @@ type RpcDefInit<ParamsType, AuthMeta = unknown, RateLimitMeta = unknown, ResultT
  */
 export const defRpc = <ParamsType, AuthMeta = unknown, RateLimitMeta = unknown, ResultType = unknown>({
   inputValidation,
+  outputValidation,
   handle,
   auth = async () => ({ success: true, result: undefined as unknown as AuthMeta }),
   rateLimit = async () => ({ success: true, result: undefined as unknown as RateLimitMeta }),
   cache = async () => undefined,
-}: RpcDefInit<ParamsType, AuthMeta, RateLimitMeta, ResultType>): RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType> => ({inputValidation, auth, rateLimit, handle, cache});
+}: RpcDefInit<ParamsType, AuthMeta, RateLimitMeta, ResultType>): RpcDef<ParamsType, AuthMeta, RateLimitMeta, ResultType> => ({inputValidation, outputValidation, auth, rateLimit, handle, cache});
 
 type RpcDef<Params, AuthMeta, RateLimitMeta, Result> = {
   inputValidation: z.ZodSchema<Params>;
+  outputValidation?: z.ZodSchema<Result>;
   auth: (rpc: Rpc<Params>) => Promise<GuardResult<AuthMeta>> | GuardResult<AuthMeta>;
   rateLimit: (rpc: Rpc<Params>, authResult: GuardResult<AuthMeta>) => Promise<GuardResult<RateLimitMeta>> | GuardResult<RateLimitMeta>;
   cache: (rpc: Rpc<Params>, authResult: GuardResult<AuthMeta>, rateLimitResult: GuardResult<RateLimitMeta>) => Promise<CacheConfig<Result>> | CacheConfig<Result>;
@@ -136,6 +138,11 @@ export class RpcHandler<RpcMap extends Record<string, RpcDef<any, any, any, any>
   constructor(
     private readonly rpcs: RpcMap,
   ) {}
+
+  /** Get the RPC definitions for documentation generation */
+  getRpcDefs(): RpcMap {
+    return this.rpcs;
+  }
 
   async handle(request: unknown): Promise<RpcReturn<any>> {
     const validated = RpcHandler.bodySchema.safeParse(request);
