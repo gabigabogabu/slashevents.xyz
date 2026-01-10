@@ -1,6 +1,7 @@
 import type { SQL } from "bun";
 import type { UUID } from "crypto";
 import { EventType } from "@/lib/event-types";
+import type { EventsCursor } from "@/server/services/events/events-cursor";
 
 export enum HttpMethod {
   GET = "GET",
@@ -42,7 +43,8 @@ export type ProjectActivityEventData = {
   name?: string;
 };
 
-type EventWithActorEmail = EventDbRow & {
+type EventWithCursorAndActorEmail = EventDbRow & {
+  cursor: string;
   actor_email: string | null;
 };
 
@@ -90,25 +92,24 @@ export const insertProjectActivityEvent = async (
 
 export const getEvents = async (
   db: SQL,
-  params: { project_id: UUID; type?: EventType; limit?: number; cursor?: { id: UUID } }
-): Promise<EventWithActorEmail[]> => {
+  params: { project_id: UUID; type?: EventType; limit?: number; cursor?: EventsCursor }
+): Promise<EventWithCursorAndActorEmail[]> => {
   const limit = params.limit ?? 50;
-
   const typeFilter = params.type ? db`AND e.type = ${params.type}` : db``;
-  const cursorFilter = params.cursor ? db`AND e.received_at > (SELECT received_at FROM events WHERE id = ${params.cursor.id})` : db``;
-  
+  const cursorFilter = params.cursor ? db`AND (EXTRACT(EPOCH FROM e.received_at)::TEXT || e.id::TEXT) > ${params.cursor.c}` : db``;
   return await db`
     SELECT 
       e.id, e.project_id, e.type, e.data, e.received_at,
-      u.email as actor_email
+      u.email as actor_email,
+      EXTRACT(EPOCH FROM e.received_at)::TEXT || e.id::TEXT as cursor
     FROM events e
     LEFT JOIN users u ON (e.data->>'actorUserId')::uuid = u.id
     WHERE e.project_id = ${params.project_id}
       ${typeFilter}
       ${cursorFilter}
-    ORDER BY e.received_at ASC, e.id ASC
+    ORDER BY cursor ASC
     LIMIT ${limit};
-  ` as EventWithActorEmail[];
+  ` as EventWithCursorAndActorEmail[];
 };
 
 export const countEvents = async (

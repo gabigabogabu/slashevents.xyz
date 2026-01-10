@@ -92,8 +92,6 @@ export const getEvents = async (
     type: params.type,
     limit: params.limit + 1,
     cursor: decodedCursor
-      ? { id: decodedCursor.id }
-      : undefined,
   });
 
   const limitedEvents = events.slice(0, params.limit);
@@ -108,9 +106,9 @@ export const getEvents = async (
   }));
 
   const hasMore = events.length > params.limit;
-  const lastEvent = mapped[mapped.length - 1];
+  const lastEvent = limitedEvents[limitedEvents.length - 1];
   const nextCursor = lastEvent && hasMore
-    ? encodeEventsCursor({ id: lastEvent.id })
+    ? encodeEventsCursor({ c: lastEvent.cursor })
     : null;
   return { events: mapped, nextCursor, hasMore };
 };

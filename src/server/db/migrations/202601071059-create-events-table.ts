@@ -21,7 +21,7 @@ export default async (db: SQL) => {
     project_id UUID NOT NULL REFERENCES app.projects(id) ON DELETE CASCADE,
     type app.event_type NOT NULL,
     data JSONB NOT NULL DEFAULT '{}',
-    received_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    received_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`;
 
   // Create indexes for efficient queries

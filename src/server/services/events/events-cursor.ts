@@ -6,11 +6,11 @@ import { RpcError } from "@/server/rpc-handler";
 
 const eventsCursorV1Schema = z.object({
   v: z.literal(1),
-  id: z.uuid(),
+  c: z.string(),
 });
 
 export type EventsCursor = {
-  id: UUID;
+  c: string;
 };
 
 const base64Encode = (value: string): string => Buffer.from(value, "utf8").toString("base64");
@@ -19,7 +19,7 @@ const base64Decode = (value: string): string => Buffer.from(value, "base64").toS
 export const encodeEventsCursor = (cursor: EventsCursor): string => {
   const payload = {
     v: 1 as const,
-    id: cursor.id,
+    c: cursor.c,
   };
   return base64Encode(JSON.stringify(payload));
 };
@@ -38,8 +38,6 @@ export const decodeEventsCursor = (cursor: string): EventsCursor => {
     throw new RpcError(ErrorCode.INVALID_INPUT, 400, "INVALID_CURSOR");
   }
 
-  return {
-    id: validated.data.id as UUID,
-  };
+  return {c: validated.data.c};
 };
 

@@ -166,7 +166,42 @@ describe("events service", () => {
       expect(secondPage.events.map(e => (e.data as queries.WebhookEventData).path)).toEqual([3, 4].map(i => `/webhook/pagination-${i}`));
     });
 
-    // test("can paginate events all with same receivedAt")
+    test("can paginate events all with same receivedAt", async () => {
+      const projectId = (await queries.insertProject(db, {
+        name: `Pagination Test ${Date.now()}`,
+        created_by_user_id: testUserId,
+      })) as UUID;
+      
+      const now = new Date();
+      for (let i = 0; i < 5; i++) {
+        await handleIngress({
+          projectId,
+          path: `/webhook/pagination-${i}`,
+          method: "POST",
+          headers: {},
+          body: null,
+          queryString: null,
+          sourceIp: null,
+          sourcePort: null,
+          receivedAt: now
+        }, { db });
+      }
+
+      const firstPage = await getEvents({ projectId, limit: 3, type: EventType.WEBHOOK_RECEIVED }, { db });
+      expect(firstPage.events.length).toBe(3);
+      expect(firstPage.nextCursor).toBeTruthy();
+      expect(firstPage.hasMore).toBe(true);
+
+      const secondPage = await getEvents({ projectId, limit: 3, type: EventType.WEBHOOK_RECEIVED, cursor: firstPage.nextCursor as string }, { db });
+      expect(secondPage.events.length).toBe(2);
+      expect(secondPage.nextCursor).toBeNull();
+      expect(secondPage.hasMore).toBe(false);
+
+      const firstPagePaths = firstPage.events.map(e => (e.data as queries.WebhookEventData).path);
+      const secondPagePaths = secondPage.events.map(e => (e.data as queries.WebhookEventData).path);
+      expect(firstPagePaths).not.toContain(secondPagePaths);
+      expect(secondPagePaths).not.toContain(firstPagePaths);
+    });
 
     test("returns webhook event", async () => {
       const webhookEventProjectId = (await queries.insertProject(db, {
