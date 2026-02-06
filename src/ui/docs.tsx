@@ -26,7 +26,7 @@ function PropTable({ params, showRequired = true, showExample = true }: { params
           {params.map((param) => (
             <tr key={param.name} className="border-b border-border/50">
               <td className="py-2 pr-4">
-                <code className="bg-muted px-1.5 py-0.5 rounded text-sm">{param.name}</code>
+                <code className="bg-muted px-1.5 py-0.5 text-sm">{param.name}</code>
               </td>
               <td className="py-2 pr-4 text-muted-foreground">
                 {param.type}
@@ -48,7 +48,7 @@ function PropTable({ params, showRequired = true, showExample = true }: { params
                     One of:{" "}
                     {param.enumValues.map((v, i) => (
                       <span key={v}>
-                        <code className="bg-muted px-1 py-0.5 rounded">{v}</code>
+                        <code className="bg-muted px-1 py-0.5">{v}</code>
                         {i < param.enumValues!.length - 1 && ", "}
                       </span>
                     ))}
@@ -57,7 +57,7 @@ function PropTable({ params, showRequired = true, showExample = true }: { params
               </td>
               {showExample && (
                 <td className="py-2 text-muted-foreground">
-                  <code className="bg-muted px-1.5 py-0.5 rounded text-sm">{JSON.stringify(generateExampleValue(param), null, 2)}</code>
+                  <code className="bg-muted px-1.5 py-0.5 text-sm">{JSON.stringify(generateExampleValue(param), null, 2)}</code>
                 </td>
               )}
             </tr>
@@ -107,7 +107,7 @@ function ReturnsTable({ returns }: { returns: ParamDoc[] }) {
             <tr key={displayName} className="border-b border-border/50">
               <td className="py-2 pr-4">
                 <code 
-                  className="bg-muted px-1.5 py-0.5 rounded text-sm"
+                  className="bg-muted px-1.5 py-0.5 text-sm"
                   style={{ marginLeft: depth * 12 }}
                 >
                   {displayName}
@@ -124,7 +124,7 @@ function ReturnsTable({ returns }: { returns: ParamDoc[] }) {
                     One of:{" "}
                     {param.enumValues.map((v, i) => (
                       <span key={v}>
-                        <code className="bg-muted px-1 py-0.5 rounded">{v}</code>
+                        <code className="bg-muted px-1 py-0.5">{v}</code>
                         {i < param.enumValues!.length - 1 && ", "}
                       </span>
                     ))}
@@ -141,7 +141,7 @@ function ReturnsTable({ returns }: { returns: ParamDoc[] }) {
 
 function CodeBlock({ children, language }: { children: string; language?: string }) {
   return (
-    <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
+    <pre className="bg-muted p-4 overflow-x-auto text-sm">
       <code>{children}</code>
     </pre>
   );
@@ -334,7 +334,7 @@ export function DocsUI({ doc }: DocsUIProps) {
           <section id="authentication" className="mb-12 scroll-mt-8">
             <h2 className="text-2xl font-semibold mb-4">Authentication</h2>
             <p className="text-muted-foreground mb-4">
-              All API requests require an <code className="bg-muted px-1.5 py-0.5 rounded">apiKey</code> parameter. 
+              All API requests require an <code className="bg-muted px-1.5 py-0.5">apiKey</code> parameter. 
               You can obtain your API key from the project settings in the dashboard.
             </p>
           </section>
@@ -373,9 +373,9 @@ export function DocsUI({ doc }: DocsUIProps) {
             
             <div className="space-y-10">
               {doc.methods.map((method) => (
-                <div key={method.name} id={method.name} className="border rounded-lg p-6 bg-card scroll-mt-8">
+                <div key={method.name} id={method.name} className="border p-6 bg-card scroll-mt-8">
                   <h3 className="text-xl font-semibold mb-2">
-                    <code className="bg-primary/10 text-primary px-2 py-1 rounded">{method.name}</code>
+                    <code className="bg-primary/10 text-primary px-2 py-1">{method.name}</code>
                   </h3>
                   {method.description && (
                     <p className="text-muted-foreground mb-4">{method.description}</p>

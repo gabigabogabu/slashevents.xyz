@@ -110,7 +110,7 @@ export function LoginPage() {
               </div>
 
               {error && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <div className="bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {error}
                 </div>
               )}

@@ -14,7 +14,6 @@ export const createProject = async (
 ): Promise<{ projectId: UUID }> => {
   const { db } = di;
 
-  // Verify user exists (JWT may be from a deleted user or old database)
   const user = await queries.getUserById(db, { id: actorUserId });
   if (!user) {
     throw new RpcError(ErrorCode.AUTHENTICATION_ERROR, 401, "User not found. Please sign in again.");
@@ -29,7 +28,6 @@ export const createProject = async (
     throw new RpcError(ErrorCode.INTERNAL_SERVER_ERROR, 500, "Failed to create project");
   }
 
-  // Log project creation event
   await queries.insertProjectActivityEvent(db, {
     project_id: projectId,
     actor_user_id: actorUserId,
@@ -37,7 +35,19 @@ export const createProject = async (
     metadata: { name },
   });
 
-  // Give creator full permissions (no permission check needed for project creator)
+  await queries.insertWebhookEvent(db, {
+    project_id: projectId,
+    data: {
+      httpMethod: queries.HttpMethod.POST,
+      path: `/ingress/${projectId}/test`,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ test: true, message: "Welcome to slashevents.io!" }),
+      queryString: null,
+      sourceIp: null,
+      sourcePort: null,
+    },
+  });
+
   await permissionsService.grantInitialPermissions({
     projectId,
     creatorUserId: actorUserId,
@@ -123,13 +133,11 @@ export const addUserToProject = async (
   di: { db: SQL }
 ): Promise<void> => {
   const { db } = di;
-  // Find the user to add by email
   const userToAdd = await queries.getUserByEmail(db, { email: userEmail });
   if (!userToAdd) {
     throw new RpcError(ErrorCode.USER_NOT_FOUND, 404);
   }
 
-  // Add user to project (checks permissions, grants permissions, logs events)
   await permissionsService.addUserToProject({
     projectId,
     userId: userToAdd.id as UUID,
@@ -143,7 +151,6 @@ export const removeUserFromProject = async (
   di: { db: SQL }
 ): Promise<void> => {
   const { db } = di;
-  // Remove user from project (checks permissions, removes all permissions, logs events)
   const { removed } = await permissionsService.removeUserFromProject({
     projectId,
     userId: userIdToRemove,
@@ -163,7 +170,6 @@ export const updateUserProjectPermissions = async (
   }: { projectId: UUID; userIdToUpdate: UUID; permissions: ProjectPermission[]; actorUserId: UUID },
   di: { db: SQL }
 ): Promise<void> => {
-  // Sync permissions (checks actor has manage permission, prevents self-revoke, and logs events)
   await permissionsService.syncPermissions({
     projectId,
     userId: userIdToUpdate,
