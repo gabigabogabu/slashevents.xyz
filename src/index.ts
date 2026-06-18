@@ -14,6 +14,7 @@ import { env } from "./env";
 import { requireAgentUser } from "./http/auth";
 import { htmlResponse, jsonResponse, notFound, respondError } from "./http/format";
 import { assertRateLimit, createFixedWindowRateLimiter, rateLimitHint } from "./http/rate-limit";
+import { logger } from "./logger";
 import { defRpc, RpcHandler } from "./rpc-handler";
 import type { Rpc } from "./rpc-handler";
 import * as agentService from "./services/agents/agents";
@@ -330,7 +331,7 @@ const createIpRateLimitedRoute = (
       assertRateLimit(scope, limiter.consume(rateLimitKey("ip", sourceIp)));
       return await handler(request, server);
     } catch (error) {
-      if (!(error instanceof AppError)) console.error("Unhandled route error", error);
+      if (!(error instanceof AppError)) logger.error(error, "Unhandled route error");
       return respondError(request, error, { defaultFormat });
     }
   };
@@ -389,7 +390,7 @@ const createRpcRoute = (
       const result = await appRpcHandler.handle(payload, context);
       return jsonResponse(result);
     } catch (error) {
-      if (!(error instanceof AppError)) console.error("Unhandled route error", error);
+      if (!(error instanceof AppError)) logger.error(error, "Unhandled route error");
       return respondError(request, error, { defaultFormat: "json" });
     }
   };
@@ -405,7 +406,7 @@ const createDocsRoute = (
       await migrationPromise;
       return htmlResponse(renderRpcDocsHtml(generateRpcDocs(appRpcHandler)));
     } catch (error) {
-      if (!(error instanceof AppError)) console.error("Unhandled route error", error);
+      if (!(error instanceof AppError)) logger.error(error, "Unhandled route error");
       return respondError(request, error, { defaultFormat: "html" });
     }
   };
@@ -442,7 +443,7 @@ const createHandleWebhook = (
         throw new AppError(result.error as ErrorCode, result.status);
       return jsonResponse(result, { status: 201 });
     } catch (error) {
-      if (!(error instanceof AppError)) console.error("Unhandled route error", error);
+      if (!(error instanceof AppError)) logger.error(error, "Unhandled route error");
       return respondError(request, error, { defaultFormat: "json" });
     }
   };
@@ -502,15 +503,15 @@ const app = Bun.serve({
     "/*": publicNotFoundRoute,
   },
   error: (error) => {
-    console.error("Unhandled server error", error);
+    logger.error(error, "Unhandled server error");
     return new Response(null, { status: 500 });
   },
 });
 
-console.log(`Server running at http://127.0.0.1:${env.PORT}`);
+logger.info({ port: env.PORT }, `Server running at http://127.0.0.1:${env.PORT}`);
 
 const shutdown = async (signal: string) => {
-  console.log(`Shutting down server on ${signal}`);
+  logger.info({ signal }, `Shutting down server on ${signal}`);
   await app.stop();
   await closeDb();
   process.exit(0);
