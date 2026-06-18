@@ -14,6 +14,8 @@ import {
   checkUserHasProjectPermission,
   checkUserHasAnyProjectPermission,
   getProjectUsers,
+  getProjectWebhookPathAllowlist,
+  updateProjectWebhookPathAllowlist,
 } from "./project";
 import { ProjectPermission } from "@/lib/project-permissions";
 import { insertUser } from "./user";
@@ -64,12 +66,27 @@ describe("project queries", () => {
     expect(project?.id).toBe(testProjectId);
     expect(project?.name).toBe("Test Project");
     expect(project?.created_by_user_id).toBe(testUserId);
+    expect(project?.webhook_path_allowlist).toEqual([]);
   });
 
   test("getProjectById returns undefined for non-existent project", async () => {
     const project = await getProjectById(db, { id: "00000000-0000-0000-0000-000000000000" as UUID });
 
     expect(project).toBeUndefined();
+  });
+
+  test("updates project webhook path allowlist", async () => {
+    const before = await getProjectWebhookPathAllowlist(db, { project_id: testProjectId });
+    expect(before).toEqual([]);
+
+    const updated = await updateProjectWebhookPathAllowlist(db, {
+      project_id: testProjectId,
+      webhook_path_allowlist: ["/stripe", "/github/hooks"],
+    });
+    expect(updated).toBe(true);
+
+    const after = await getProjectWebhookPathAllowlist(db, { project_id: testProjectId });
+    expect(after).toEqual(["/stripe", "/github/hooks"]);
   });
 
   test("insertProjectUserPermission adds a permission", async () => {

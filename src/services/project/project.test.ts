@@ -152,6 +152,7 @@ describe("project service", () => {
       expect(result.project).toBeDefined();
       expect(result.project.id).toBe(testProjectId);
       expect(result.project.name).toBe("Get Project Test");
+      expect(result.project.webhookPathAllowlist).toEqual([]);
     });
 
     test("throws for user without access", async () => {
@@ -165,6 +166,56 @@ describe("project service", () => {
       await expect(
         projectService.getProject({ projectId: fakeId, actorUserId: ownerUserId }, { db })
       ).rejects.toThrow();
+    });
+  });
+
+  describe("setProjectWebhookPathAllowlist", () => {
+    let testProjectId: UUID;
+
+    beforeAll(async () => {
+      const result = await projectService.createProject(
+        { name: "Webhook Allowlist Test", actorUserId: ownerUserId },
+        { db }
+      );
+      testProjectId = result.projectId;
+    });
+
+    test("replaces the webhook path allowlist", async () => {
+      const result = await projectService.setProjectWebhookPathAllowlist(
+        {
+          projectId: testProjectId,
+          paths: ["/stripe", "/github/hooks"],
+          actorUserId: ownerUserId,
+        },
+        { db }
+      );
+
+      expect(result.webhookPathAllowlist).toEqual(["/stripe", "/github/hooks"]);
+
+      const project = await projectService.getProject(
+        { projectId: testProjectId, actorUserId: ownerUserId },
+        { db }
+      );
+      expect(project.project.webhookPathAllowlist).toEqual(["/stripe", "/github/hooks"]);
+    });
+
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
+      await queries.allowProjectUserPermission(db, {
+        project_id: testProjectId,
+        user_id: memberUserId,
+        permission: ProjectPermission.PROJECT_READ_USERS,
+      });
+
+      await expect(
+        projectService.setProjectWebhookPathAllowlist(
+          {
+            projectId: testProjectId,
+            paths: ["/stripe"],
+            actorUserId: memberUserId,
+          },
+          { db }
+        )
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
     });
   });
 

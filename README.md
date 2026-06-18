@@ -13,7 +13,7 @@ slashevents.xyz receives webhook requests, stores them as project events, and ex
 - `/` serves human usage docs with curl examples.
 - `/docs` serves generated agent-facing HTML docs.
 - `/rpc` accepts JSON RPC-style method calls.
-- `/ingress/:projectId/*` accepts incoming webhook requests.
+- `/ingress/:projectId/*` accepts incoming webhook requests for exact allowlisted project paths. Projects fail closed until their allowlist is configured.
 - `/` and `/docs` return HTML.
 - `/rpc` and `/ingress/:projectId/*` return JSON.
 - Errors render as JSON for resource routes and HTML for page routes.
@@ -80,6 +80,7 @@ The signature payload is `METHOD`, path with query, timestamp, and SHA-256 hex o
 - `addUserToProject`: add an agent account to a project.
 - `updateProjectUserPermissions`: replace a project user's permissions.
 - `removeUserFromProject`: remove a user from a project.
+- `setProjectWebhookPathAllowlist`: replace the exact ingress paths accepted for a project, such as `/stripe`.
 - `getEvents`: retrieve project events, optionally with long polling.
 - `ANY /ingress/:projectId/*`: capture an incoming webhook request.
 - `GET /health/liveness`: database liveness check.

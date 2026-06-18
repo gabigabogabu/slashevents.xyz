@@ -6,8 +6,9 @@ import { AppError, InvalidInputError } from "@/lib/app-error";
 import { ErrorCode } from "@/lib/errors";
 import { EventType } from "@/lib/event-types";
 import { ProjectPermission } from "@/lib/project-permissions";
+import { ingressSubpath, isWebhookPathAllowed } from "@/lib/webhook-path-allowlist";
 import { getDb, isDbUp } from "./db/init";
-import { checkUserHasProjectPermission } from "./db/queries/project";
+import { checkUserHasProjectPermission, getProjectWebhookPathAllowlist } from "./db/queries/project";
 import { MigrationStatus, runMigrations } from "./db/run-migrations";
 import { generateRpcDocs, renderRpcDocsHtml } from "./docs/generate-docs";
 import { env } from "./env";
@@ -26,7 +27,7 @@ const services = {
   events: eventsService,
   projects: projectService,
 };
-const queries = { checkUserHasProjectPermission };
+const queries = { checkUserHasProjectPermission, getProjectWebhookPathAllowlist };
 const auth = { requireAgentUser };
 const rateLimits = {
   publicPageByIp: createFixedWindowRateLimiter({ limit: 60, windowMs: 60_000 }),
@@ -66,10 +67,18 @@ const agentUserSchema = z.object({
   revokedAt: z.string().nullable(),
 });
 
-const projectSchema = z.object({
+const webhookPathSchema = z.string().trim().min(1).max(2048)
+  .refine((path) => path.startsWith("/"), "Path must start with /")
+  .refine((path) => !path.includes("?") && !path.includes("#"), "Path must not include query or hash");
+
+const projectSummarySchema = z.object({
   id: z.uuid(),
   name: z.string(),
   createdAt: z.string(),
+});
+
+const projectSchema = projectSummarySchema.extend({
+  webhookPathAllowlist: z.array(webhookPathSchema),
 });
 
 const eventSchema = z.object({
@@ -163,7 +172,7 @@ const createAppRpcHandler = (deps: RpcDeps) =>
 
     getProjects: defRpc({
       inputValidation: z.object({}),
-      outputValidation: z.object({ projects: z.array(projectSchema) }),
+      outputValidation: z.object({ projects: z.array(projectSummarySchema) }),
       ...createAuthenticatedRpcGuards(deps),
       handle: async ({ authResult }) =>
         deps.services.projects.getProjects({
@@ -252,6 +261,21 @@ const createAppRpcHandler = (deps: RpcDeps) =>
         }, { db: deps.db });
         return { ok: true };
       },
+    }),
+
+    setProjectWebhookPathAllowlist: defRpc({
+      inputValidation: z.object({
+        projectId: z.uuid(),
+        paths: z.array(webhookPathSchema).max(64),
+      }),
+      outputValidation: z.object({ webhookPathAllowlist: z.array(webhookPathSchema) }),
+      ...createAuthenticatedRpcGuards(deps),
+      handle: async ({ params, authResult }) =>
+        deps.services.projects.setProjectWebhookPathAllowlist({
+          projectId: params.projectId as UUID,
+          actorUserId: (authResult.result as AuthenticatedUser).id,
+          paths: params.paths,
+        }, { db: deps.db }),
     }),
 
     getEvents: defRpc({
@@ -412,9 +436,10 @@ const createDocsRoute = (
   };
 
 const createHandleWebhook = (
-  { db, migrationPromise, services }: {
+  { db, migrationPromise, queries, services }: {
     db: SQL;
     migrationPromise: Promise<unknown>;
+    queries: Pick<AppQueries, "getProjectWebhookPathAllowlist">;
     services: AppServices;
   },
 ) =>
@@ -422,11 +447,17 @@ const createHandleWebhook = (
     try {
       await migrationPromise;
       const projectId = parseUuid(request.params.projectId, "projectId");
+      const url = new URL(request.url);
+      const path = ingressSubpath(projectId, url.pathname);
+      const allowedPaths = await queries.getProjectWebhookPathAllowlist(db, { project_id: projectId });
+      if (!allowedPaths)
+        throw new AppError(ErrorCode.PROJECT_NOT_FOUND, 404);
+      if (!isWebhookPathAllowed(allowedPaths, path))
+        throw new AppError(ErrorCode.FORBIDDEN, 403, "Webhook path is not allowlisted for this project");
       const headers = Object.fromEntries(request.headers.entries());
       const body = ["GET", "HEAD"].includes(request.method)
         ? null
         : await request.text().catch(() => null);
-      const url = new URL(request.url);
       const socket = server.requestIP(request);
       const result = await services.events.handleIngress({
         projectId,
@@ -456,7 +487,7 @@ const { getMigrationsStatus, migrationPromise } = runMigrations(db);
 const appRpcHandler = createAppRpcHandler({ db, services, queries, auth, rateLimits });
 const rpcRoute = createRpcRoute({ appRpcHandler, migrationPromise, rateLimits });
 const docsRoute = createDocsRoute({ appRpcHandler, migrationPromise });
-const handleWebhook = createHandleWebhook({ db, migrationPromise, services });
+const handleWebhook = createHandleWebhook({ db, migrationPromise, queries, services });
 const isAppAlive = createIsAppAlive({ db, isDbUp });
 const isAppReady = createIsAppReady({ db, getMigrationsStatus, isDbUp });
 // TODO remove rate limit once production ready
