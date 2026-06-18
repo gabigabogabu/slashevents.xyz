@@ -458,6 +458,7 @@ const docsRoute = createDocsRoute({ appRpcHandler, migrationPromise });
 const handleWebhook = createHandleWebhook({ db, migrationPromise, services });
 const isAppAlive = createIsAppAlive({ db, isDbUp });
 const isAppReady = createIsAppReady({ db, getMigrationsStatus, isDbUp });
+// TODO remove rate limit once production ready
 const landingRoute = createIpRateLimitedRoute({
   limiter: rateLimits.publicPageByIp,
   scope: "public pages",
@@ -466,18 +467,21 @@ const landingRoute = createIpRateLimitedRoute({
     headers: { "Content-Type": "text/html; charset=utf-8" },
   }),
 });
+// TODO remove rate limit once production ready
 const publicDocsRoute = createIpRateLimitedRoute({
   limiter: rateLimits.publicPageByIp,
   scope: "public pages",
   defaultFormat: "html",
   handler: docsRoute,
 });
+// TODO remove rate limit once production ready and billing is set up
 const ingressRoute = createIpRateLimitedRoute({
   limiter: rateLimits.ingressByIp,
   scope: "ingress",
   defaultFormat: "json",
   handler: handleWebhook,
 });
+// TODO remove rate limit
 const publicNotFoundRoute = createIpRateLimitedRoute({
   limiter: rateLimits.publicPageByIp,
   scope: "public pages",
