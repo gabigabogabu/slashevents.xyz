@@ -77,8 +77,14 @@ const projectSummarySchema = z.object({
   createdAt: z.string(),
 });
 
+const retentionConfigSchema = z.object({
+  durationSeconds: z.number().int().min(1).max(2_147_483_647).nullable(),
+  maxEvents: z.number().int().min(1).max(2_147_483_647).nullable(),
+});
+
 const projectSchema = projectSummarySchema.extend({
   webhookPathAllowlist: z.array(webhookPathSchema),
+  retentionConfig: retentionConfigSchema,
 });
 
 const eventSchema = z.object({
@@ -278,6 +284,23 @@ const createAppRpcHandler = (deps: RpcDeps) =>
         }, { db: deps.db }),
     }),
 
+    setProjectRetentionConfig: defRpc({
+      inputValidation: z.object({
+        projectId: z.uuid(),
+        retentionConfig: retentionConfigSchema,
+      }),
+      outputValidation: z.object({
+        retentionConfig: retentionConfigSchema,
+      }),
+      ...createAuthenticatedRpcGuards(deps),
+      handle: async ({ params, authResult }) =>
+        deps.services.projects.setProjectRetentionConfig({
+          projectId: params.projectId as UUID,
+          actorUserId: (authResult.result as AuthenticatedUser).id,
+          retentionConfig: params.retentionConfig,
+        }, { db: deps.db }),
+    }),
+
     getEvents: defRpc({
       inputValidation: z.object({
         projectId: z.uuid(),
@@ -308,6 +331,23 @@ const createAppRpcHandler = (deps: RpcDeps) =>
           cursor: params.cursor,
           longPollDurationSeconds: params.longPollDurationSeconds,
         }, { db: deps.db });
+      },
+    }),
+
+    removeEvent: defRpc({
+      inputValidation: z.object({
+        projectId: z.uuid(),
+        eventId: z.uuid(),
+      }),
+      outputValidation: z.object({ ok: z.boolean() }),
+      ...createAuthenticatedRpcGuards(deps),
+      handle: async ({ params, authResult }) => {
+        await deps.services.events.removeEvent({
+          projectId: params.projectId as UUID,
+          eventId: params.eventId as UUID,
+          actorUserId: (authResult.result as AuthenticatedUser).id,
+        }, { db: deps.db });
+        return { ok: true };
       },
     }),
 

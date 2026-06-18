@@ -6,9 +6,11 @@ import type { UUID } from "crypto";
 
 import { getTestDb, resetTestDb } from "@/db/test-setup";
 import * as queries from "@/db/queries";
-import { handleIngress, getEvents, getEventsLongPoll } from "./events";
+import { handleIngress, getEvents, getEventsLongPoll, removeEvent } from "./events";
 import { HttpMethod } from "@/db/queries/event";
 import { EventType } from "@/lib/event-types";
+import { ProjectPermission } from "@/lib/project-permissions";
+import { ErrorCode } from "@/lib/errors";
 
 describe("events service", () => {
   let db: SQL;
@@ -243,7 +245,7 @@ describe("events service", () => {
               sourceIp: '192.168.1.1',
               sourcePort: 12345,
             },
-            receivedAt: expect.any(Date),
+            receivedAt: expect.any(String),
           }
         ]
       });
@@ -397,6 +399,81 @@ describe("events service", () => {
         expect(elapsedMs).toBeGreaterThanOrEqual(2000);
         expect(result.events).toEqual([]);
       });
+    });
+  });
+
+  describe("removeEvent", () => {
+    const createProject = async (name: string, grantManage = false): Promise<UUID> => {
+      const projectId = (await queries.insertProject(db, {
+        name: `${name} ${Date.now()}`,
+        created_by_user_id: testUserId,
+      })) as UUID;
+      if (grantManage) {
+        await queries.allowProjectUserPermission(db, {
+          project_id: projectId,
+          user_id: testUserId,
+          permission: ProjectPermission.PROJECT_MANAGE_USERS,
+        });
+      }
+      return projectId;
+    };
+
+    const createWebhookEvent = async (projectId: UUID, path: string): Promise<UUID> => {
+      const ingressResult = await handleIngress({
+        projectId,
+        path,
+        method: "POST",
+        headers: {},
+        body: null,
+        queryString: null,
+        sourceIp: null,
+        sourcePort: null,
+      }, { db });
+      if ("error" in ingressResult) throw new Error(ingressResult.error);
+      return ingressResult.eventId;
+    };
+
+    test("removes an event for a project manager", async () => {
+      const projectId = await createProject("Remove Event Test", true);
+      const eventId = await createWebhookEvent(projectId, "/webhook/remove-me");
+      await removeEvent({
+        projectId,
+        eventId,
+        actorUserId: testUserId,
+      }, { db });
+
+      const events = await getEvents({ projectId, limit: 10 }, { db });
+      expect(events.events.some((event) => event.id === eventId)).toBe(false);
+    });
+
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
+      const projectId = await createProject("Remove Event No Access");
+      const eventId = await createWebhookEvent(projectId, "/webhook/keep-me");
+
+      await expect(
+        removeEvent({
+          projectId,
+          eventId,
+          actorUserId: testUserId,
+        }, { db })
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
+    });
+
+    test("does not remove an event from a different project", async () => {
+      const managedProjectId = await createProject("Managed Remove Event", true);
+      const eventProjectId = await createProject("Other Remove Event");
+      const eventId = await createWebhookEvent(eventProjectId, "/webhook/other-project");
+
+      await expect(
+        removeEvent({
+          projectId: managedProjectId,
+          eventId,
+          actorUserId: testUserId,
+        }, { db })
+      ).rejects.toThrow(ErrorCode.NOT_FOUND);
+
+      const events = await getEvents({ projectId: eventProjectId, limit: 10 }, { db });
+      expect(events.events.some((event) => event.id === eventId)).toBe(true);
     });
   });
 });

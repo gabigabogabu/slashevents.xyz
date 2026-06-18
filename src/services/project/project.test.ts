@@ -153,6 +153,7 @@ describe("project service", () => {
       expect(result.project.id).toBe(testProjectId);
       expect(result.project.name).toBe("Get Project Test");
       expect(result.project.webhookPathAllowlist).toEqual([]);
+      expect(result.project.retentionConfig).toEqual({ durationSeconds: null, maxEvents: null });
     });
 
     test("throws for user without access", async () => {
@@ -211,6 +212,69 @@ describe("project service", () => {
           {
             projectId: testProjectId,
             paths: ["/stripe"],
+            actorUserId: memberUserId,
+          },
+          { db }
+        )
+      ).rejects.toThrow(ErrorCode.PROJECT_NOT_FOUND);
+    });
+  });
+
+  describe("setProjectRetentionConfig", () => {
+    let testProjectId: UUID;
+
+    beforeAll(async () => {
+      const result = await projectService.createProject(
+        { name: "Retention Config Test", actorUserId: ownerUserId },
+        { db }
+      );
+      testProjectId = result.projectId;
+    });
+
+    test("replaces the project retention config", async () => {
+      const result = await projectService.setProjectRetentionConfig(
+        {
+          projectId: testProjectId,
+          retentionConfig: { durationSeconds: 604800, maxEvents: 1000 },
+          actorUserId: ownerUserId,
+        },
+        { db }
+      );
+
+      expect(result.retentionConfig).toEqual({ durationSeconds: 604800, maxEvents: 1000 });
+
+      const project = await projectService.getProject(
+        { projectId: testProjectId, actorUserId: ownerUserId },
+        { db }
+      );
+      expect(project.project.retentionConfig).toEqual({ durationSeconds: 604800, maxEvents: 1000 });
+    });
+
+    test("allows disabling retention limits", async () => {
+      const result = await projectService.setProjectRetentionConfig(
+        {
+          projectId: testProjectId,
+          retentionConfig: { durationSeconds: null, maxEvents: null },
+          actorUserId: ownerUserId,
+        },
+        { db }
+      );
+
+      expect(result.retentionConfig).toEqual({ durationSeconds: null, maxEvents: null });
+    });
+
+    test("throws PROJECT_NOT_FOUND when actor lacks manage permission", async () => {
+      await queries.allowProjectUserPermission(db, {
+        project_id: testProjectId,
+        user_id: memberUserId,
+        permission: ProjectPermission.PROJECT_READ_USERS,
+      });
+
+      await expect(
+        projectService.setProjectRetentionConfig(
+          {
+            projectId: testProjectId,
+            retentionConfig: { durationSeconds: 86400, maxEvents: 100 },
             actorUserId: memberUserId,
           },
           { db }

@@ -7,6 +7,8 @@ type ProjectDbRow = {
   name: string;
   created_by_user_id: UUID;
   webhook_path_allowlist: string[];
+  retention_duration_seconds: number | null;
+  retention_max_events: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -19,6 +21,9 @@ type ProjectUserPermissionDbRow = {
   created_at: string;
   updated_at: string;
 };
+
+const parseWebhookPathAllowlist = (value: string[] | string): string[] =>
+  Array.isArray(value) ? value : JSON.parse(value) as string[];
 
 export const insertProject = async (
   db: SQL,
@@ -36,8 +41,9 @@ export const getProjectById = async (
   params: { id: UUID }
 ): Promise<ProjectDbRow | undefined> => {
   const res =
-    await db`SELECT id, name, created_by_user_id, webhook_path_allowlist, created_at, updated_at FROM projects WHERE id = ${params.id};` as ProjectDbRow[];
-  return res[0];
+    await db`SELECT id, name, created_by_user_id, webhook_path_allowlist, retention_duration_seconds, retention_max_events, created_at, updated_at FROM projects WHERE id = ${params.id};` as (ProjectDbRow & { webhook_path_allowlist: string[] | string })[];
+  const project = res[0];
+  return project ? { ...project, webhook_path_allowlist: parseWebhookPathAllowlist(project.webhook_path_allowlist) } : undefined;
 };
 
 export const getProjectWebhookPathAllowlist = async (
@@ -46,10 +52,11 @@ export const getProjectWebhookPathAllowlist = async (
 ): Promise<string[] | undefined> => {
   const res =
     await db`SELECT webhook_path_allowlist FROM projects WHERE id = ${params.project_id};` as Pick<
-      ProjectDbRow,
+      ProjectDbRow & { webhook_path_allowlist: string[] | string },
       "webhook_path_allowlist"
     >[];
-  return res[0]?.webhook_path_allowlist;
+  const webhookPathAllowlist = res[0]?.webhook_path_allowlist;
+  return webhookPathAllowlist ? parseWebhookPathAllowlist(webhookPathAllowlist) : undefined;
 };
 
 export const updateProjectWebhookPathAllowlist = async (
@@ -59,6 +66,20 @@ export const updateProjectWebhookPathAllowlist = async (
   const res = await db`
     UPDATE projects
     SET webhook_path_allowlist = ${JSON.stringify(params.webhook_path_allowlist)}::jsonb
+    WHERE id = ${params.project_id}
+    RETURNING id;
+  ` as Pick<ProjectDbRow, "id">[];
+  return res.length > 0;
+};
+
+export const updateProjectRetentionConfig = async (
+  db: SQL,
+  params: { project_id: UUID; retention_duration_seconds: number | null; retention_max_events: number | null }
+): Promise<boolean> => {
+  const res = await db`
+    UPDATE projects
+    SET retention_duration_seconds = ${params.retention_duration_seconds},
+      retention_max_events = ${params.retention_max_events}
     WHERE id = ${params.project_id}
     RETURNING id;
   ` as Pick<ProjectDbRow, "id">[];

@@ -9,6 +9,11 @@ import { ProjectPermission } from "@/lib/project-permissions";
 import * as permissionsService from "./permissions";
 import { EventType } from "@/lib/event-types";
 
+export type ProjectRetentionConfig = {
+  durationSeconds: number | null;
+  maxEvents: number | null;
+};
+
 export const createProject = async (
   { name, actorUserId }: { name: string, actorUserId: UUID },
   di: { db: SQL }
@@ -62,7 +67,7 @@ export const getProjects = async (
 export const getProject = async (
   { projectId, actorUserId }: { projectId: UUID; actorUserId: UUID },
   { db }: { db: SQL }
-): Promise<{ project: { id: UUID; name: string; webhookPathAllowlist: string[]; createdAt: string } }> => {
+): Promise<{ project: { id: UUID; name: string; webhookPathAllowlist: string[]; retentionConfig: ProjectRetentionConfig; createdAt: string } }> => {
   const hasAccess = await queries.checkUserHasAnyProjectPermission(db, {
     project_id: projectId,
     user_id: actorUserId,
@@ -80,6 +85,10 @@ export const getProject = async (
       id: project.id,
       name: project.name,
       webhookPathAllowlist: project.webhook_path_allowlist,
+      retentionConfig: {
+        durationSeconds: project.retention_duration_seconds,
+        maxEvents: project.retention_max_events,
+      },
       createdAt: timestampToIsoString(project.created_at),
     },
   };
@@ -106,6 +115,34 @@ export const setProjectWebhookPathAllowlist = async (
     throw new AppError(ErrorCode.PROJECT_NOT_FOUND, 404);
 
   return { webhookPathAllowlist: paths };
+};
+
+export const setProjectRetentionConfig = async (
+  {
+    projectId,
+    retentionConfig,
+    actorUserId,
+  }: { projectId: UUID; retentionConfig: ProjectRetentionConfig; actorUserId: UUID },
+  { db }: { db: SQL }
+): Promise<{ retentionConfig: ProjectRetentionConfig }> => {
+  const hasAccess = await queries.checkUserHasProjectPermission(db, {
+    project_id: projectId,
+    user_id: actorUserId,
+    permission: ProjectPermission.PROJECT_MANAGE_USERS,
+  });
+
+  if (!hasAccess)
+    throw new AppError(ErrorCode.PROJECT_NOT_FOUND, 404);
+
+  const updated = await queries.updateProjectRetentionConfig(db, {
+    project_id: projectId,
+    retention_duration_seconds: retentionConfig.durationSeconds,
+    retention_max_events: retentionConfig.maxEvents,
+  });
+  if (!updated)
+    throw new AppError(ErrorCode.PROJECT_NOT_FOUND, 404);
+
+  return { retentionConfig };
 };
 
 export const getProjectUsers = async (

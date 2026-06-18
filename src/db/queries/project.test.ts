@@ -16,6 +16,7 @@ import {
   getProjectUsers,
   getProjectWebhookPathAllowlist,
   updateProjectWebhookPathAllowlist,
+  updateProjectRetentionConfig,
 } from "./project";
 import { ProjectPermission } from "@/lib/project-permissions";
 import { insertUser } from "./user";
@@ -67,6 +68,8 @@ describe("project queries", () => {
     expect(project?.name).toBe("Test Project");
     expect(project?.created_by_user_id).toBe(testUserId);
     expect(project?.webhook_path_allowlist).toEqual([]);
+    expect(project?.retention_duration_seconds).toBeNull();
+    expect(project?.retention_max_events).toBeNull();
   });
 
   test("getProjectById returns undefined for non-existent project", async () => {
@@ -87,6 +90,19 @@ describe("project queries", () => {
 
     const after = await getProjectWebhookPathAllowlist(db, { project_id: testProjectId });
     expect(after).toEqual(["/stripe", "/github/hooks"]);
+  });
+
+  test("updates project retention config", async () => {
+    const updated = await updateProjectRetentionConfig(db, {
+      project_id: testProjectId,
+      retention_duration_seconds: 604800,
+      retention_max_events: 1000,
+    });
+    expect(updated).toBe(true);
+
+    const project = await getProjectById(db, { id: testProjectId });
+    expect(project?.retention_duration_seconds).toBe(604800);
+    expect(project?.retention_max_events).toBe(1000);
   });
 
   test("insertProjectUserPermission adds a permission", async () => {

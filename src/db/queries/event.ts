@@ -48,6 +48,9 @@ type EventWithCursorAndActorName = EventDbRow & {
   actor_name: string | null;
 };
 
+const parseEventData = (value: Record<string, unknown> | string): Record<string, unknown> =>
+  typeof value === "string" ? JSON.parse(value) as Record<string, unknown> : value;
+
 export const eventsChangedChannel = (projectId: UUID): string =>
   `slashevents_events_${projectId.replaceAll("-", "")}`;
 
@@ -154,7 +157,7 @@ export const getEvents = async (
   const limit = params.limit ?? 50;
   const typeFilter = params.type ? db`AND e.type = ${params.type}` : db``;
   const cursorFilter = params.cursor ? db`AND (EXTRACT(EPOCH FROM e.received_at)::TEXT || e.id::TEXT) > ${params.cursor.c}` : db``;
-  return await db`
+  const rows = await db`
     SELECT 
       e.id, e.project_id, e.type, e.data, e.received_at,
       u.display_name as actor_name,
@@ -166,7 +169,8 @@ export const getEvents = async (
       ${cursorFilter}
     ORDER BY cursor ASC
     LIMIT ${limit};
-  ` as EventWithCursorAndActorName[];
+  ` as (EventWithCursorAndActorName & { data: Record<string, unknown> | string })[];
+  return rows.map((row) => ({ ...row, data: parseEventData(row.data) }));
 };
 
 export const countEvents = async (
@@ -193,16 +197,20 @@ export const getEventById = async (
     SELECT id, project_id, type, data, received_at
     FROM events
     WHERE id = ${params.id};
-  ` as EventDbRow[];
-  return res[0];
+  ` as (EventDbRow & { data: Record<string, unknown> | string })[];
+  const event = res[0];
+  return event ? { ...event, data: parseEventData(event.data) } : undefined;
 };
 
 export const deleteEvent = async (
   db: SQL,
-  params: { id: UUID }
+  params: { id: UUID; project_id: UUID }
 ): Promise<boolean> => {
   const res = await db`
-    DELETE FROM events WHERE id = ${params.id} RETURNING id;
+    DELETE FROM events
+    WHERE id = ${params.id}
+      AND project_id = ${params.project_id}
+    RETURNING id;
   ` as { id: UUID }[];
   return res.length > 0;
 };

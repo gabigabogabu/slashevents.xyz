@@ -6,6 +6,9 @@ import { timestampToIsoString } from "@/db/timestamps";
 import { HttpMethod, type EventsChangedNotification } from "@/db/queries/event";
 import { decodeEventsCursor, encodeEventsCursor } from "./events-cursor";
 import { EventType } from "@/lib/event-types";
+import { AppError } from "@/lib/app-error";
+import { ErrorCode } from "@/lib/errors";
+import { ProjectPermission } from "@/lib/project-permissions";
 
 const HTTP_METHOD_MAP: Record<string, HttpMethod | undefined> = {
   GET: HttpMethod.GET,
@@ -194,4 +197,24 @@ export const getEventsLongPoll = async (
   } finally {
     unsubscribe();
   }
+};
+
+export const removeEvent = async (
+  params: { projectId: UUID; eventId: UUID; actorUserId: UUID },
+  { db }: { db: SQL }
+): Promise<void> => {
+  const hasAccess = await queries.checkUserHasProjectPermission(db, {
+    project_id: params.projectId,
+    user_id: params.actorUserId,
+    permission: ProjectPermission.PROJECT_MANAGE_USERS,
+  });
+  if (!hasAccess)
+    throw new AppError(ErrorCode.PROJECT_NOT_FOUND, 404);
+
+  const removed = await queries.deleteEvent(db, {
+    id: params.eventId,
+    project_id: params.projectId,
+  });
+  if (!removed)
+    throw new AppError(ErrorCode.NOT_FOUND, 404, "Event not found");
 };
