@@ -62,7 +62,7 @@ export const getProjects = async (
 export const getProject = async (
   { projectId, actorUserId }: { projectId: UUID; actorUserId: UUID },
   { db }: { db: SQL }
-): Promise<{ project: { id: UUID; name: string; createdAt: string } }> => {
+): Promise<{ project: { id: UUID; name: string; webhookPathAllowlist: string[]; createdAt: string } }> => {
   const hasAccess = await queries.checkUserHasAnyProjectPermission(db, {
     project_id: projectId,
     user_id: actorUserId,
@@ -79,9 +79,33 @@ export const getProject = async (
     project: {
       id: project.id,
       name: project.name,
+      webhookPathAllowlist: project.webhook_path_allowlist,
       createdAt: timestampToIsoString(project.created_at),
     },
   };
+};
+
+export const setProjectWebhookPathAllowlist = async (
+  { projectId, paths, actorUserId }: { projectId: UUID; paths: string[]; actorUserId: UUID },
+  { db }: { db: SQL }
+): Promise<{ webhookPathAllowlist: string[] }> => {
+  const hasAccess = await queries.checkUserHasProjectPermission(db, {
+    project_id: projectId,
+    user_id: actorUserId,
+    permission: ProjectPermission.PROJECT_MANAGE_USERS,
+  });
+
+  if (!hasAccess)
+    throw new AppError(ErrorCode.PROJECT_NOT_FOUND, 404);
+
+  const updated = await queries.updateProjectWebhookPathAllowlist(db, {
+    project_id: projectId,
+    webhook_path_allowlist: paths,
+  });
+  if (!updated)
+    throw new AppError(ErrorCode.PROJECT_NOT_FOUND, 404);
+
+  return { webhookPathAllowlist: paths };
 };
 
 export const getProjectUsers = async (
