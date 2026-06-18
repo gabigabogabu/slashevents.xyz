@@ -1,5 +1,6 @@
 import { SQL } from "bun";
 import type { SQL as SQLClient } from "@/db/types";
+import { logger } from "@/logger";
 import { type Env } from "../env";
 
 export const getDb = (env: Env) => {
@@ -9,7 +10,7 @@ export const getDb = (env: Env) => {
     },
   });
   const closeDb = async () => {
-    console.log("Closing database connection");
+    logger.info("Closing database connection");
     await db.close();
   };
   return { db, closeDb };
@@ -20,7 +21,7 @@ export const isDbUp = async (db: SQLClient) => {
     const [row] = await db`SELECT 1 as "alive"` as { alive: number }[];
     return row?.alive === 1;
   } catch (error) {
-    console.error("Error checking database status:", error);
+    logger.error(error, "Error checking database status");
     return false;
   }
 };

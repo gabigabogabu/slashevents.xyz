@@ -1,4 +1,5 @@
 import type { SQL } from "@/db/types";
+import { logger } from "@/logger";
 import { ADVISORY_LOCK_IDS, withAdvisoryLock } from "./advisory-lock";
 import { readdir } from "node:fs/promises";
 import sortBy from "lodash/sortBy";
@@ -17,7 +18,7 @@ export const runMigrations = (db: SQL) => {
   };
 
   const migrationPromise = withAdvisoryLock(db, ADVISORY_LOCK_IDS.MIGRATIONS, async () => {
-    console.log("Running migrations");
+    logger.info("Running migrations");
     migrationsStatus = MigrationStatus.RUNNING;
     // const [{migrations}] = await db`SELECT 1 as "migrations"`;
     // return migrations === 1;
@@ -35,19 +36,19 @@ export const runMigrations = (db: SQL) => {
     ]));
     const migrationsToRun = sortBy(migrationNames.filter(name => !alreadyAppliedMigrations.includes(name)));
     const missingMigrations = alreadyAppliedMigrations.filter(appliedMigration => !migrationNames.includes(appliedMigration));
-    console.dir({ alreadyAppliedMigrations, migrationNames, migrationsToRun, missingMigrations });
+    logger.info({ alreadyAppliedMigrations, migrationNames, migrationsToRun, missingMigrations }, "Migration status");
     for (const migrationName of migrationsToRun) {
-      console.log(`Running migration: ${migrationName}`);
+      logger.info({ migrationName }, `Running migration: ${migrationName}`);
       const migrationFileName = migrationFileByName.get(migrationName);
       if (!migrationFileName) throw new Error(`Migration file not found: ${migrationName}`);
       const migrationFn = (await import(`./migrations/${migrationFileName}`)).default;
       await migrationFn(db);
       await db`INSERT INTO migrations.migrations (name) VALUES (${migrationName})`;
-      console.log(`Migration ${migrationName} completed`);
+      logger.info({ migrationName }, `Migration ${migrationName} completed`);
     }
 
     migrationsStatus = MigrationStatus.COMPLETED;
-    console.log("Migrations completed");
+    logger.info("Migrations completed");
   });
 
   return {
