@@ -1,0 +1,46 @@
+services:
+  app:
+    image: ${SLASHEVENTS_IMAGE:-ghcr.io/gabigabogabu/slashevents:0.2.0}
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://slashevents:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/slashevents
+      SLASHEVENTS_API_TOKEN: ${SLASHEVENTS_API_TOKEN:?Set SLASHEVENTS_API_TOKEN in .env}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+      RPC_RATE_LIMIT_PER_MINUTE: ${RPC_RATE_LIMIT_PER_MINUTE:-120}
+      INGRESS_RATE_LIMIT_PER_MINUTE: ${INGRESS_RATE_LIMIT_PER_MINUTE:-120}
+      PUBLIC_RATE_LIMIT_PER_MINUTE: ${PUBLIC_RATE_LIMIT_PER_MINUTE:-60}
+      AUTH_FAILURE_RATE_LIMIT_PER_MINUTE: ${AUTH_FAILURE_RATE_LIMIT_PER_MINUTE:-20}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-1048576}
+      RETENTION_INTERVAL_SECONDS: ${RETENTION_INTERVAL_SECONDS:-60}
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: slashevents
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: slashevents
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slashevents -d slashevents"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  postgres-data:

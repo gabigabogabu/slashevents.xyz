@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-push: bun run lint"
+bun run lint
+
+echo "pre-push: bun tsc --noEmit"
+bun tsc --noEmit
+
+echo "pre-push: bun test"
+bun test

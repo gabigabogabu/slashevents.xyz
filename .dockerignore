@@ -1,0 +1,9 @@
+*
+!package.json
+!bun.lock
+!tsconfig.json
+!LICENSE
+!src/
+!src/**
+src/**/*.test.ts
+src/db/test-setup.ts
